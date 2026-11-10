@@ -1,17 +1,11 @@
 # GitHub setup
 
-Repository: `RPJWeez/delivery-reference-platform`. The owner created the repository and the local origin is configured. Visibility and license remain the owner's choice; no license has been assigned automatically.
+Source repository: RPJWeez/delivery-reference-platform. Deployment repository: RPJWeez/fieldsignal-deploy. Keep both public for the free-tier demonstration.
 
-## Before public demonstration
+Main requires a PR and the GitHub Actions ci check, with zero required approvals for a solo maintainer. Block deletion/force pushes, and use no routine bypass. Apply equivalent protection to the deployment repository after its initial ci workflow is registered. Genuine multi-person approval needs another reviewer; the author cannot approve their own PR.
 
-- Configure main branch rules: require pull requests, passing `ci` checks, owner review, resolved conversations, and prevent bypass/force push.
-- Replace illustrative team ownership with real GitHub teams if using an organization. For a personal repository, `@RPJWeez` is the effective reviewer; simulated teams demonstrate boundaries but do not prove multi-person approval enforcement.
-- Keep PR jobs read-only. Never execute PR-controlled code in `pull_request_target` with write credentials.
-- Enable dependency updates and review SHA-pinned action changes.
-- Before publication is added, enable GHCR and define package retention/access. Choose Maven/npm package registries and scoped names.
-- Define dev/staging/production environments with approvals and branch restrictions. Check which rules and attestation features are supported by the account's plan and visibility.
-- Select Kubernetes target, OIDC trust policy and namespace-scoped roles before enabling deployment. Do not add a shared cluster-admin kubeconfig.
+Public package visibility is separate from source visibility. Make GHCR charts/images and the npm package public after initial creation; Maven packages inherit repository access. Do not configure paid runner sizes or Nx Cloud. Verify account billing stop-usage controls separately; this repository does not change billing settings.
 
-## Proposed workflow separation
+Publication jobs run only on protected main. PR jobs are unprivileged. Workflows use scoped GITHUB_TOKEN/OIDC rather than stored publishing credentials. Maven local package reads may need a read-only package token outside CI.
 
-`ci.yml` runs catalog-based impact selection, policy/Helm checks, affected Java tests, web builds, and a real PostgreSQL/Kafka smoke test on PRs and main. The stable `ci` job aggregates the result for branch protection. Later workflows should separate unprivileged test/build from trusted publishing, artifact selection, and environment promotion. Publish only from protected main with fixed workflow identities. Promotion accepts an already published release bundle digest, not an arbitrary source branch or image tag.
+The deployment pipeline verifies the candidate's signed artifact evidence and successful qualification before promotion. Existing production pin updates are reviewed Git changes; publication never updates them automatically. A local kind/Argo installation supplies the demonstration runtime; persistent cloud and Apigee targets remain optional decisions.

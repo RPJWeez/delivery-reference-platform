@@ -1,0 +1,121 @@
+# Disposable test infrastructure, deliberately outside the application's release.
+apiVersion: v1
+kind: Secret
+metadata: {name: fieldsignal-database}
+type: Opaque
+stringData: {DATABASE_PASSWORD: fieldsignal-local-only}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: fieldsignal-test-databases}
+data:
+  init.sql: |
+    CREATE USER ingestion_user WITH PASSWORD 'fieldsignal-local-only';
+    CREATE USER incident_user WITH PASSWORD 'fieldsignal-local-only';
+    CREATE DATABASE ingestion OWNER ingestion_user;
+    CREATE DATABASE incident OWNER incident_user;
+    REVOKE CONNECT ON DATABASE ingestion FROM PUBLIC;
+    REVOKE CONNECT ON DATABASE incident FROM PUBLIC;
+    GRANT CONNECT ON DATABASE ingestion TO ingestion_user;
+    GRANT CONNECT ON DATABASE incident TO incident_user;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fieldsignal-test-postgres}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: fieldsignal-test-postgres}}
+  template:
+    metadata: {labels: {app: fieldsignal-test-postgres}}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.7@sha256:2006493727bd5277eece187319af1ef82b4cf82cf4fc1ed00da0775b646ac2a4
+          env:
+            - {name: POSTGRES_USER, value: fieldsignal}
+            - {name: POSTGRES_PASSWORD, value: fieldsignal-local-only}
+          ports: [{containerPort: 5432}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '1', memory: 256Mi}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, fieldsignal]}
+            periodSeconds: 3
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: init, mountPath: /docker-entrypoint-initdb.d}
+      volumes:
+        - {name: data, emptyDir: {}}
+        - {name: init, configMap: {name: fieldsignal-test-databases}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: fieldsignal-test-postgres}
+spec:
+  selector: {app: fieldsignal-test-postgres}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fieldsignal-test-kafka}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: fieldsignal-test-kafka}}
+  template:
+    metadata: {labels: {app: fieldsignal-test-kafka}}
+    spec:
+      securityContext: {fsGroup: 1000}
+      containers:
+        - name: kafka
+          image: apache/kafka:4.1.1@sha256:0bc1bb2478f45b6cea78864df86acdc11e8df2c5172477819a4d12942cbe5d40
+          env:
+            - {name: KAFKA_NODE_ID, value: '1'}
+            - {name: KAFKA_PROCESS_ROLES, value: 'broker,controller'}
+            - {name: KAFKA_LISTENERS, value: 'PLAINTEXT://:9092,CONTROLLER://:9093'}
+            - {name: KAFKA_ADVERTISED_LISTENERS, value: 'PLAINTEXT://fieldsignal-test-kafka:9092'}
+            - {name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP, value: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'}
+            - {name: KAFKA_CONTROLLER_LISTENER_NAMES, value: CONTROLLER}
+            - {name: KAFKA_CONTROLLER_QUORUM_VOTERS, value: '1@localhost:9093'}
+            - {name: KAFKA_INTER_BROKER_LISTENER_NAME, value: PLAINTEXT}
+            - {name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR, value: '1'}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR, value: '1'}
+            - {name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR, value: '1'}
+            - {name: KAFKA_AUTO_CREATE_TOPICS_ENABLE, value: 'false'}
+            - {name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS, value: '0'}
+            - {name: KAFKA_HEAP_OPTS, value: '-Xms128m -Xmx256m'}
+            - {name: KAFKA_LOG_DIRS, value: /tmp/kraft-combined-logs}
+            - {name: CLUSTER_ID, value: MkU3OEVBNTcwNTJENDM2Qk}
+          resources:
+            requests: {cpu: 100m, memory: 384Mi}
+            limits: {cpu: '1', memory: 640Mi}
+          readinessProbe:
+            tcpSocket: {port: 9092}
+            periodSeconds: 3
+          volumeMounts: [{name: data, mountPath: /tmp/kraft-combined-logs}]
+      volumes: [{name: data, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: fieldsignal-test-kafka}
+spec:
+  selector: {app: fieldsignal-test-kafka}
+  ports: [{port: 9092, targetPort: 9092}]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: fieldsignal-test-topics}
+spec:
+  activeDeadlineSeconds: 180
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics
+          image: apache/kafka:4.1.1@sha256:0bc1bb2478f45b6cea78864df86acdc11e8df2c5172477819a4d12942cbe5d40
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server fieldsignal-test-kafka:9092 --list; do sleep 2; done
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server fieldsignal-test-kafka:9092 --create --if-not-exists --topic fieldsignal.reading-recorded.v1 --partitions 3 --replication-factor 1
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server fieldsignal-test-kafka:9092 --create --if-not-exists --topic fieldsignal.reading-recorded.v1.DLT --partitions 3 --replication-factor 1

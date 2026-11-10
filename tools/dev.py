@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     java = str(Path(os.environ["JAVA_HOME"]) / "bin/java") if os.environ.get("JAVA_HOME") else shutil.which("java")
     npm = shutil.which("npm")
-    jars = [ROOT / f"apps/{name}/target/{name}-0.1.0-SNAPSHOT.jar" for name in ("ingestion-service", "incident-service")]
+    jars = [ROOT / f"apps/{name}/target/{name}.jar" for name in ("ingestion-service", "incident-service")]
     if not java or not npm or not all(p.is_file() for p in jars) or not (ROOT / "libraries/ui/dist/index.js").is_file():
         sys.exit("Install Java 21/Node and run npm ci && make build first.")
     children = []

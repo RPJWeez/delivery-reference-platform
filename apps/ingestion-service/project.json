@@ -1,0 +1,12 @@
+{
+  "tags": ["type:service"],
+  "targets": {
+    "container": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -f apps/ingestion-service/Dockerfile -t fieldsignal/ingestion-service:local ."
+      }
+    }
+  },
+  "implicitDependencies": ["readings-api", "reading-events"]
+}

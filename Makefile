@@ -1,16 +1,12 @@
-.PHONY: verify test-java build dev infra infra-down smoke
-MAVEN ?= mvn
+.PHONY: verify test-java build dev infra infra-down smoke functional
 verify:
-	python3 -m unittest discover -s tests -v
-	helm lint charts/application
-	python3 tools/delivery.py values releases/examples/sensing.json > /tmp/application-monorepo-values.json
-	helm template sensing charts/application -f /tmp/application-monorepo-values.json > /tmp/application-monorepo-rendered.yaml
+	npm run test:workspace
+	helm lint charts/application -f charts/application/ci/values.yaml
 
 test-java:
-	$(MAVEN) --batch-mode --no-transfer-progress verify
+	npx nx run-many -t mvn-verify
 
 build:
-	$(MAVEN) --batch-mode --no-transfer-progress package
 	npm run build
 
 dev:
@@ -25,3 +21,6 @@ infra-down:
 
 smoke:
 	python3 tools/smoke.py
+
+functional:
+	npm run test:functional

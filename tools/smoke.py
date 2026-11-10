@@ -2,6 +2,7 @@
 """Real HTTP → PostgreSQL/outbox → Kafka → incident projection smoke test."""
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -44,15 +45,18 @@ def main():
     assert len(projected) == 1 and projected[0]["severity"] == "CRITICAL"
     assert call(8082, f"/api/incidents/{reading_id}/acknowledge", {})[0] == 204
     assert incidents()[0]["status"] == "ACKNOWLEDGED"
-    compose = ["docker", "compose", "-f", str(Path(__file__).resolve().parents[1] / "infra/local/compose.yaml")]
-    subprocess.run(compose + ["exec", "-T", "kafka", "/opt/kafka/bin/kafka-console-producer.sh",
-                   "--bootstrap-server", "kafka:19092", "--topic", "fieldsignal.reading-recorded.v1",
+    namespace = os.environ.get("FIELDSIGNAL_TEST_NAMESPACE")
+    broker = (["kubectl", "-n", namespace, "exec", "deployment/fieldsignal-test-kafka", "--"] if namespace else
+              ["docker", "compose", "-f", str(Path(__file__).resolve().parents[1] / "infra/local/compose.yaml"), "exec", "-T", "kafka"])
+    bootstrap = os.environ.get("KAFKA_TEST_BOOTSTRAP", "kafka:19092")
+    subprocess.run((broker[:-1] + ["-i", "--"] if namespace else broker) + ["/opt/kafka/bin/kafka-console-producer.sh",
+                   "--bootstrap-server", bootstrap, "--topic", "fieldsignal.reading-recorded.v1",
                    "--producer-property", "acks=all"],
                    input=json.dumps(event) + "\n", text=True, check=True, timeout=30, capture_output=True)
     # Wait for consumer group lag to reach zero, proving the replay was processed.
     def replay_drained():
-        result = subprocess.run(compose + ["exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh",
-                                "--bootstrap-server", "kafka:19092", "--group", "fieldsignal-incidents-v1", "--describe"],
+        result = subprocess.run(broker + ["/opt/kafka/bin/kafka-consumer-groups.sh",
+                                "--bootstrap-server", bootstrap, "--group", "fieldsignal-incidents-v1", "--describe"],
                                 text=True, capture_output=True, check=True, timeout=20)
         rows = [line.split() for line in result.stdout.splitlines() if "fieldsignal.reading-recorded.v1" in line]
         return len(rows) == 3 and all(row[5] == "0" or (row[3] == "-" and row[4] == "0") for row in rows)

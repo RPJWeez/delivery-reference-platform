@@ -6,11 +6,34 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
     "build": "vite build",
-    "typecheck": "tsc -p ../../tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@fieldsignal/ui": "0.1.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "@rpjweez/fieldsignal-ui": "0.1.0"
+  },
+  "nx": {
+    "tags": [
+      "type:frontend"
+    ],
+    "targets": {
+      "container": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "docker build -f apps/operator-console/Dockerfile -t fieldsignal/operator-console:local ."
+        }
+      },
+      "build": {
+        "inputs": [
+          "default",
+          "^default",
+          "{workspaceRoot}/infra/frontend/**/*"
+        ]
+      }
+    },
+    "implicitDependencies": [
+      "incidents-api"
+    ]
   }
 }

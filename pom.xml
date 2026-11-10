@@ -8,13 +8,18 @@
     <relativePath/>
   </parent>
   <groupId>io.fieldsignal</groupId>
-  <artifactId>fieldsignal</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <artifactId>fieldsignal-parent</artifactId>
+  <version>0.1.0</version>
   <packaging>pom</packaging>
   <properties>
     <java.version>21</java.version>
     <project.build.outputTimestamp>2026-11-10T00:00:00Z</project.build.outputTimestamp>
   </properties>
+  <build><pluginManagement><plugins>
+    <plugin><groupId>dev.nx.maven</groupId><artifactId>nx-maven-plugin</artifactId><version>0.0.19</version></plugin>
+  </plugins></pluginManagement></build>
+  <distributionManagement><repository><id>github</id><url>https://maven.pkg.github.com/RPJWeez/delivery-reference-platform</url></repository></distributionManagement>
+  <profiles><profile><id>published-dependencies</id><repositories><repository><id>github</id><url>https://maven.pkg.github.com/RPJWeez/delivery-reference-platform</url><snapshots><enabled>false</enabled></snapshots></repository></repositories></profile></profiles>
   <modules>
     <module>libraries/measurements</module>
     <module>libraries/event-model</module>

@@ -1,64 +1,41 @@
-# Reference architecture
+# Architecture
 
-## Intent and boundaries
+FieldSignal is one business application maintained by several teams. Sensing owns ingestion and the station console; Response owns incident processing and the operator console. The **application composition** is the release and qualification boundary. Components retain independent build/publication identities.
 
-One repository represents one business application, contributed to by several teams. Source co-location provides visibility and consistent tooling; it does not imply synchronized versions or application-wide deployments. FieldSignal monitors synthetic river-level stations and coordinates incident review. Sensing owns ingestion and station console; Response owns incident processing and operator console. See [the application plan](fieldsignal.md).
+## Sources of truth
 
-```mermaid
-flowchart LR
-  PR[Team pull request] --> CI[Impact graph + tests + contracts]
-  CI --> Build[Trusted build on main]
-  Build --> Registry[GHCR / Maven / npm / OCI charts]
-  Registry --> Evidence[Digest + signed provenance + SBOM]
-  Evidence --> Proposal[Team release manifest PR]
-  Proposal --> Gate[Verify identity + policy + approvals]
-  Gate --> Dev[Team namespace in dev]
-  Dev --> Stage[Promote same digests to staging]
-  Stage --> Prod[Promote same digests to production]
-```
+| Concern                                       | Authority                                                      |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| Java dependencies and package versions        | POM files                                                      |
+| JavaScript dependencies and package versions  | package.json and package-lock.json                             |
+| Affected tasks and declared contract coupling | Standard Nx graph and project configuration                    |
+| Review ownership                              | CODEOWNERS                                                     |
+| Complete release selection                    | Standard Helm candidate chart and values in fieldsignal-deploy |
+| Active application candidate                  | OCI digest in the environment's Argo Application               |
+| Qualification                                 | Signed attestation bound to that digest                        |
 
-## Proposed technology choices
+Nx's Maven plugin is experimental, pinned, and covered by selection/build tests. It delegates dependency analysis to Maven and execution to Maven/npm. No Nx Cloud subscription is required. Contracts that are not imported code still need explicit relationships; native Nx implicitDependencies record them without a second graph format.
 
-| Concern | Choice | Reason |
-| --- | --- | --- |
-| Java | Java 21, Spring Boot, Maven reactor | Familiar ecosystem, selective reactor builds, explicit dependencies |
-| Web | React, TypeScript, Vite, npm workspaces | Multiple independently built frontends and reusable UI package |
-| Events | Kafka, versioned JSON Schema initially | Explicit evolution rules, consumer isolation and replay demonstrations |
-| Edge | Apigee proxy bundles | Version gateway configuration separately from workloads |
-| Runtime | Kubernetes, Helm 3 | Common chart, explicit per-team release boundary |
-| CI | GitHub Actions | Reviewable public evidence and OIDC-based identity |
-| Registry | GHCR plus Maven/npm registries | OCI for images, charts, configuration and release bundles |
-| Evidence | Sigstore signatures, SLSA-format provenance, SPDX/CycloneDX SBOM | Bind claims to content digests and trusted builders |
-| Deployment | Explicit promotion workflow initially | Straightforward digest selection; GitOps is a later documented alternative |
+## Build and publication
 
-Implemented dependencies are pinned in the Maven parent and npm lockfile; local infrastructure images are pinned by OCI digest. This document does not claim these controls are already enforced.
+PRs run affected component tests/builds, dependency-selection regression tests and Helm schema/render checks. Protected main publishes affected artifacts. A publication failure keeps the workflow unsuccessful, so the next comparison does not silently omit those changes. Versioned Maven/npm/chart coordinates cannot be overwritten with different bytes; identical retries reuse them. Image versions include commit, run and attempt; deployment uses digests.
 
-## Three different graphs
+Release builds resolve published library versions, never mutable snapshots. A new library version does not silently change a consumer pin. Maven/npm changes must explicitly update the dependent version when adopting a new library. Local source-linked development is separate from this publication path.
 
-1. **Build graph:** a shared library change selects its transitive consumers for build/test. A catalog describes dependencies; missing paths conservatively select all builds.
-2. **Contract graph:** API and event consumers are verified against compatible interface versions. Runtime coupling does not require simultaneous deployment.
-3. **Release graph:** immutable artifacts selected for a single release unit. Build impact does not automatically enroll artifacts in a deployment.
+## Qualification and promotion
 
-Shared libraries initially compile from the same reactor for development. Before promotion, release builds must consume explicit published, immutable Maven/npm versions, with lockfiles where supported. A consumer built against a new shared library must be a new consumer artifact. Publishing a library never mutates a running service.
+The deployment repository packages a standard Helm wrapper chart containing image digests and its vendored shared-chart dependency. Qualification verifies evidence, deploys that exact OCI candidate through one Argo Application in disposable kind, and runs browser/API/replay tests. Its signed result records the candidate digest, deployment-config revision, test-suite digest, runner architecture and workflow URL.
 
-## Ownership and isolation
+Promotion changes the environment's candidate OCI digest. GitOps uses Argo CD native OCI sources, so a mutable chart tag cannot change the selected content. Environment values may vary endpoints, secret references, resources and replica counts; they cannot override images or business rules. These differences receive static validation and review, not a claim that every environment is identical.
 
-Each workload belongs to exactly one release unit and one team. Each unit has a namespace, service account, namespace-scoped deployment role, and concurrency key `(environment, release-unit)`. Namespaces are provisioned by Platform, outside application releases. Teams cannot apply cluster-scoped resources. NetworkPolicy, ResourceQuota, LimitRange, Kafka ACLs, and per-service database credentials provide additional isolation.
+A prepared PR is not active desired state. Merging its environment change requests deployment. Concurrent source publication cannot alter its digest selections. Conflicting production promotions require refreshed review and validation against the prospective merged configuration. A frozen candidate is qualified as a whole; composing two independently tested candidates produces a new candidate.
 
-CODEOWNERS is a review routing mechanism, not runtime authorization. Branch rules must require the relevant owner approval; deployment authorization must independently bind the caller to the release unit. The manifest validator's `owner` field alone is not authentication.
+## Rollout and recovery
 
-## Atomicity means a bounded recovery unit
+One Application is a coherent desired-state/operational boundary, not a distributed transaction. Rolling pods, cached browser clients and Kafka replay require compatibility. Use expand/migrate/contract database changes, versioned event semantics, deprecation windows and feature activation after prerequisites are ready. Git rollback restores a previous compatible candidate and does not undo emitted events or destructive data changes.
 
-One chart can render several workloads belonging to the same release unit. Install or upgrade that chart as one Helm release with Helm 3 `--atomic --wait --timeout 5m`. This provides readiness-based rollback, not a distributed transaction or a guarantee that users see all services switch simultaneously. Rolling updates may serve mixed versions. Strict traffic-level cutover requires a separate blue/green routing mechanism.
+Argo uses Helm to render resources; it does not create a Helm-managed release. Platform dependencies and Argo itself are outside FieldSignal's resource ownership. A restricted AppProject allows application resources only in the intended namespaces. Cluster-administrator intervention remains outside the normal promotion path.
 
-Database changes follow expand/migrate/contract. Kafka consumers tolerate at-least-once delivery with persisted idempotency keys, retry budgets and dead-letter handling. A transactional outbox bridges database state and event publication. Apigee proxy deployment is a separately versioned change coordinated by backward-compatible contracts. Rollback cannot retract already published events or destructive schema changes.
+## Free-tier boundaries
 
-## Artifact inventory
-
-Every promoted object has a human version and content digest: container image, Maven library, npm package, chart package, API proxy ZIP, schema bundle, environment configuration bundle, and release bundle. Each requires an SBOM or accurately scoped inventory and signed provenance. Artifact metadata records source commit, builder workflow identity, build inputs and dependencies. Promotion carries original digests rather than rebuilding per environment.
-
-Registry tags and version strings are lookup conveniences; deployment resolves by digest. Retention protects all referenced blobs and evidence. Registry authorization prevents ordinary users overwriting release coordinates. Signature verification enforces issuer, repository, workflow identity and approved source ref; accepting any valid signature is insufficient.
-
-## Cost-conscious local demonstration
-
-Start with kind, a single Kafka broker, and one Postgres instance with separate databases/users per service. Use synthetic fixtures. Keep Apigee integration opt-in because a real deployment needs an organization/environment and credentials. A local gateway adapter can exercise HTTP routing, but must never be presented as a real Apigee deployment. Cloud infrastructure and paid services require a separate target decision.
+Use public GHCR images/charts and public GitHub Packages. Standard GitHub-hosted runners are used; no larger runners or Nx Cloud. Passing CI logs are ephemeral, failure reports retain 14 days, and signed release evidence lives with retained artifacts. Retain every qualified/deployed/rollback candidate and its dependency closure. Never blindly purge untagged OCI manifests or evidence. Persistent cloud Kubernetes and a real Apigee subscription are deliberately outside this baseline.

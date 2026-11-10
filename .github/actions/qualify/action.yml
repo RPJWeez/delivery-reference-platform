@@ -1,0 +1,111 @@
+name: Qualify a published FieldSignal application
+description: Test the exact OCI candidate through one Argo CD Application in disposable kind.
+inputs:
+  reference:
+    {
+      required: true,
+      description: Digest-addressed candidate OCI reference without scheme,
+    }
+  deployment-revision:
+    {
+      required: true,
+      description: Commit containing the qualification environment values,
+    }
+outputs:
+  predicate:
+    value: .work/qualification.json
+    description: Qualification predicate to attest only after this action succeeds
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with: { node-version: "22.22.0" }
+    - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3
+      with:
+        {
+          version: v0.31.0,
+          cluster_name: fieldsignal-qualification,
+          wait: 120s,
+        }
+    - name: Install platform dependencies and pinned Argo CD
+      shell: bash
+      env:
+        PLATFORM_ROOT: ${{ github.action_path }}/../../..
+      run: |
+        set -euo pipefail
+        kubectl create namespace fieldsignal-qualification
+        kubectl apply -n fieldsignal-qualification -f "$PLATFORM_ROOT/infra/qualification/dependencies.yaml"
+        kubectl wait -n fieldsignal-qualification --for=condition=complete job/fieldsignal-test-topics --timeout=240s
+        kubectl create namespace argocd
+        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/94037c4d4e1af4bd0651d37a179fbd9e347e668c/manifests/core-install.yaml
+        kubectl rollout status -n argocd deployment/argocd-repo-server --timeout=240s
+        kubectl rollout status -n argocd statefulset/argocd-application-controller --timeout=240s
+    - name: Reconcile exactly one application from the candidate digest
+      shell: bash
+      env:
+        REFERENCE: ${{ inputs.reference }}
+        DEPLOYMENT_REVISION: ${{ inputs.deployment-revision }}
+      run: |
+        set -euo pipefail
+        [[ "$REFERENCE" =~ @sha256:[a-f0-9]{64}$ ]]
+        kubectl apply -f bootstrap/project.yaml
+        kubectl create --dry-run=client -f environments/qualification/application.yaml -o json |
+          jq --arg digest "${REFERENCE##*@}" --arg revision "$DEPLOYMENT_REVISION" \
+            '.spec.sources[0].targetRevision = $digest | .spec.sources[1].targetRevision = $revision' |
+          kubectl apply -f -
+        kubectl wait -n argocd --for=jsonpath='{.status.sync.status}'=Synced application/fieldsignal-qualification --timeout=300s
+        kubectl wait -n argocd --for=jsonpath='{.status.health.status}'=Healthy application/fieldsignal-qualification --timeout=300s
+    - name: Business-functional and replay verification
+      shell: bash
+      env:
+        PLATFORM_ROOT: ${{ github.action_path }}/../../..
+        FIELDSIGNAL_TEST_NAMESPACE: fieldsignal-qualification
+        KAFKA_TEST_BOOTSTRAP: fieldsignal-test-kafka:9092
+      run: |
+        set -euo pipefail
+        npm ci --prefix "$PLATFORM_ROOT"
+        cd "$PLATFORM_ROOT"
+        npx playwright install --with-deps chromium
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-station-console 5173:8080 > /tmp/stations.log 2>&1 &
+        station_pid=$!
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-operator-console 5174:8080 > /tmp/operators.log 2>&1 &
+        operator_pid=$!
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-ingestion-service 8081:8080 > /tmp/ingestion.log 2>&1 &
+        ingestion_pid=$!
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-incident-service 8082:8080 > /tmp/incidents.log 2>&1 &
+        incident_pid=$!
+        trap 'kill "$station_pid" "$operator_pid" "$ingestion_pid" "$incident_pid" 2>/dev/null || true' EXIT
+        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:5173/healthz
+        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:5174/healthz
+        npm run test:functional
+        python3 tools/smoke.py
+    - name: Record exact qualification inputs
+      shell: bash
+      env:
+        REFERENCE: ${{ inputs.reference }}
+        DEPLOYMENT_REVISION: ${{ inputs.deployment-revision }}
+        PLATFORM_ROOT: ${{ github.action_path }}/../../..
+      run: |
+        mkdir -p .work
+        python3 - <<'PY'
+        import hashlib, json, os, platform
+        from pathlib import Path
+        root = Path(os.environ['PLATFORM_ROOT'])
+        files = [root/'package-lock.json', root/'tests/functional/fieldsignal.spec.ts', root/'tools/smoke.py']
+        suite = hashlib.sha256(b''.join(p.read_bytes() for p in files)).hexdigest()
+        result = {'result': 'passed', 'candidate': os.environ['REFERENCE'],
+                  'deploymentRevision': os.environ['DEPLOYMENT_REVISION'],
+                  'testSuiteDigest': 'sha256:'+suite, 'architecture': platform.machine(),
+                  'run': os.environ['GITHUB_SERVER_URL']+'/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/'+os.environ['GITHUB_RUN_ID']}
+        Path('.work/qualification.json').write_text(json.dumps(result, indent=2)+'\n')
+        PY
+    - name: Failure diagnostics
+      if: failure()
+      shell: bash
+      run: |
+        kubectl get applications -n argocd -o yaml || true
+        kubectl get pods -A || true
+        kubectl get events -n fieldsignal-qualification --sort-by=.lastTimestamp || true
+        kubectl logs -n argocd statefulset/argocd-application-controller --tail=100 || true
+        kubectl logs -n fieldsignal-qualification deployment/fieldsignal-ingestion-service --tail=100 || true
+        kubectl logs -n fieldsignal-qualification deployment/fieldsignal-incident-service --tail=100 || true

@@ -1,0 +1,10 @@
+**
+!apps/
+!apps/*/
+!apps/*/target/
+!apps/*/target/*.jar
+!apps/*/dist/
+!apps/*/dist/**
+!infra/
+!infra/frontend/
+!infra/frontend/**

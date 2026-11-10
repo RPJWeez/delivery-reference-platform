@@ -1,19 +1,9 @@
-# ADR 0001: independent release units in one application repository
+# ADR 0001: application-level qualification and promotion
 
-Status: accepted for the reference architecture.
+Status: accepted; supersedes the initial team-scoped release-unit prototype.
 
-## Context
+FieldSignal's business capabilities span components. Components build and publish independently, but release qualification and promotion select the complete application composition. One Argo Application per environment manages that composition. Team ownership remains a development/review concern.
 
-Multiple teams share libraries and platform tooling. Deploying the entire repository at HEAD risks promoting unrelated changes. One deployment per microservice cannot represent a small team-owned feature that needs a common rollback boundary.
+A standard packaged Helm candidate contains exact image selections and vendored shared-chart templates. The deployment repository pins its OCI digest and environment values. Qualification evidence is cryptographically bound to the candidate. Native Maven/npm/Nx configuration replaces the custom build catalog and impact engine.
 
-## Decision
-
-Maintain an explicit component graph and separate team-owned release units. A release is a complete manifest of immutable artifact selections for one unit, installed as one Helm release. Shared charts are published independently and pinned by digest. Shared libraries trigger consumer builds but do not trigger consumer deployment.
-
-## Consequences
-
-Teams can promote independently and retain old artifact selections. A release unit must stay small enough to be operated and rolled back by one owner. Contracts must tolerate mixed runtime versions. Helm recovery is bounded to managed Kubernetes resources. Multi-team distributed transactions and global release trains are deliberately outside this boundary.
-
-## Alternatives considered
-
-One application-wide Helm release couples teams and enlarges blast radius. One release per service is appropriate for fully independent services, but loses a shared recovery boundary when several workloads truly form one feature set. A GitOps controller can implement the same manifest model later; adopting one does not eliminate artifact verification or define atomicity by itself.
+This improves coherent functional testing without claiming instantaneous runtime cutover. Contracts and database/event evolution must remain compatible across rolling deployment and supported rollback windows.

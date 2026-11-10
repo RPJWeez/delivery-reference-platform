@@ -1,0 +1,20 @@
+releaseVersion: fixture
+workloads:
+  example-service:
+    image: ghcr.io/example/service@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    port: 8080
+    replicas: 1
+    env:
+      PORT: "8080"
+    envFromSecret: example-database
+  example-frontend:
+    image: ghcr.io/example/frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    port: 8080
+    replicas: 1
+    livenessPath: /healthz
+    readinessPath: /healthz
+    env:
+      API_UPSTREAM: fieldsignal-example-service:8080
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { cpu: 100m, memory: 128Mi }

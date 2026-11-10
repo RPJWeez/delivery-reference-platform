@@ -33,6 +33,18 @@ spec:
         - name: {{ $name }}
           image: {{ $workload.image | quote }}
           imagePullPolicy: IfNotPresent
+          {{- with $workload.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with $workload.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ $workload.port }}
@@ -42,12 +54,7 @@ spec:
             capabilities:
               drop: [ALL]
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
+            {{- toYaml ($workload.resources | default (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "512Mi"))) | nindent 12 }}
           startupProbe:
             httpGet:
               path: {{ $workload.livenessPath | default "/actuator/health/liveness" }}
@@ -80,6 +87,6 @@ spec:
     app.kubernetes.io/name: {{ $name }}
   ports:
     - name: http
-      port: 80
+      port: 8080
       targetPort: http
 {{- end }}

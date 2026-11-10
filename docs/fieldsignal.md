@@ -4,15 +4,15 @@ Monitor synthetic river-level stations, identify elevated observations and coord
 
 The rules are transparent: below 3.0 meters is normal, at least 3.0 meters is watch, and at least 4.5 meters is critical. These are demonstration thresholds, not hydrological guidance.
 
-## Ownership and release units
+## Ownership
 
-| Team | Current deployables | Shared inputs | Future capabilities |
-| --- | --- | --- | --- |
-| Sensing | `ingestion-service`, `station-console` | Event model, measurements, UI, readings API/event contracts | Device registry, authenticated ingestion, calibration |
-| Response | `incident-service`, `operator-console` | Event model, measurements, UI, incident API/event contracts | Rules engine, correlated incidents, notifications |
-| Platform | Common chart and delivery tools | Catalog, trust and release policy | Signed publication, verification, promotion, observability |
+| Team     | Current deployables                    | Shared inputs                                               | Future capabilities                                        |
+| -------- | -------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| Sensing  | `ingestion-service`, `station-console` | Event model, measurements, UI, readings API/event contracts | Device registry, authenticated ingestion, calibration      |
+| Response | `incident-service`, `operator-console` | Event model, measurements, UI, incident API/event contracts | Rules engine, correlated incidents, notifications          |
+| Platform | Common chart and delivery tools        | Catalog, trust and release policy                           | Signed publication, verification, promotion, observability |
 
-Services have separate database users and databases. Each team release is the complete intended state of its backend and frontend. Library changes rebuild consumers; UI package changes rebuild both frontends. Neither implies automatic deployment.
+Services have separate database users and databases. The application candidate is the complete intended state of all backends and frontends. Library changes rebuild consumers; UI package changes rebuild both frontends. Neither implies automatic deployment.
 
 ## First slice
 
@@ -30,7 +30,7 @@ This slice does not aggregate observations into one incident per station. That l
 
 - **Device registry service:** device identity, station metadata and calibration history; Sensing.
 - **Rules service or stream processor:** versioned rules, windowed detection and replay comparison; Response.
-- **Field-work service:** assignments and investigation resolution; a new Field Operations team/release unit.
+- **Field-work service:** assignments and investigation resolution; a new Field Operations team.
 - **Notification worker:** synthetic provider adapter, bounded retries and provider-failure isolation.
 - **Scheduled aggregation job:** daily summaries in an independently built CronJob image.
 - **Public status frontend:** delayed summaries through a separate read model, exercising public/private gateway routing.

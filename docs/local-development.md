@@ -1,40 +1,30 @@
 # Local development
 
-Requires Java 21, Maven 3.9+, Node 22.12+, npm, Docker Compose and Python 3. Helm 3 is needed for delivery checks.
+Prerequisites: Java 21, Node 22.12+, Docker, Python 3 and Helm 3. The Maven Wrapper pins Maven; Nx delegates to Maven/npm and does not use Nx Cloud.
 
 ```sh
-make infra
 npm ci
+make infra
 make build
 make dev
 ```
 
-`make dev` runs built Java JARs and Vite servers. Backend changes require rebuilding and restarting; frontend edits reload automatically. After shared UI TypeScript edits, run `npm run build --workspace @fieldsignal/ui`. Ctrl-C stops the launcher and its child processes.
+Consoles: 127.0.0.1:5173 and :5174. APIs: :8081 and :8082. Local PostgreSQL: :55432. Kafka: :9092 (container listener kafka:19092). Vite routes local API calls; it is not Apigee.
 
-| Address | Purpose |
-| --- | --- |
-| `http://127.0.0.1:5173` | Station console |
-| `http://127.0.0.1:5174` | Operator console |
-| `http://127.0.0.1:8081/api/readings` | Submission and latest 100 observations |
-| `http://127.0.0.1:8082/api/incidents` | Latest 100 incidents and acknowledgment |
-| `/actuator/health/readiness` on either API | Readiness |
-| `127.0.0.1:55432` | PostgreSQL |
-| `127.0.0.1:9092` | Kafka external listener |
-
-Vite proxies route to the corresponding API; this is not an Apigee emulator. Container clients use Kafka's `kafka:19092` listener.
+After Java edits, rebuild and restart. Frontends reload; rebuild the shared UI package with `npx nx build @rpjweez/fieldsignal-ui` after UI TypeScript edits. Ctrl-C stops the dev launcher and its children.
 
 ```sh
 make verify
 make test-java
 npm run typecheck
+npm run test:functional
 make smoke
 python3 tools/simulate.py --count 9
+make infra-down
 ```
 
-Java transaction tests use H2 compatibility mode and do not replace PostgreSQL/Kafka integration tests. The smoke test persists synthetic readings, verifies the real asynchronous projection, and checks retry/conflict/acknowledgment behavior. Fresh UUIDs make repeated runs safe.
+Java tests use H2 for transactions/idempotency. The smoke test uses real APIs/Kafka; qualification sets FIELDSIGNAL_TEST_NAMESPACE to replay through Kubernetes instead of Compose. Business-functional tests use the two running browser consoles.
 
-Environment overrides: `PORT`, `BIND_ADDRESS`, `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS`. Defaults bind to loopback with local-only credentials. Production requires secret references, authentication and scoped identities.
+Local credentials and test data are synthetic. APIs bind to loopback unless configured otherwise. Production uses secret references and environment configuration. The local Compose named volumes survive `make infra-down`; initialization SQL only runs for an empty PostgreSQL volume.
 
-`make infra-down` stops containers and retains named volumes. Initialization SQL runs only on an empty PostgreSQL data volume; editing it does not update an existing database. Use migrations or deliberately reset disposable data. Never reuse local credentials outside this stack.
-
-The local reactor uses snapshot versions and unsigned development artifacts. Published immutable versions and verified promotion are a separate milestone.
+Local development may compile source-linked libraries. Published image builds resolve explicit released library versions. The deployment repository tests published candidate artifacts without rebuilding them.
