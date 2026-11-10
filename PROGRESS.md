@@ -2,7 +2,7 @@
 
 ## Current state
 
-FieldSignal is the selected application. Git is initialized on `main`; origin is `https://github.com/RPJWeez/delivery-reference-platform.git`. No cloud resources have been provisioned.
+FieldSignal is the selected application. The initial implementation is published as commit `16b3eccb8867c127c6c6ae115d93b0f9da9d6546`. Git is on `main`, tracking `origin/main` via `git@github.com:RPJWeez/delivery-reference-platform.git`. No cloud resources have been provisioned.
 
 ## Implemented
 
@@ -26,11 +26,13 @@ FieldSignal is the selected application. Git is initialized on `main`; origin is
 
 Commands: `make verify`, `make test-java`, `npm run build`, `npm run typecheck`, `make smoke`.
 
+The [initial GitHub CI run](https://github.com/RPJWeez/delivery-reference-platform/actions/runs/42892772306) passed all seven jobs: impact, policy, both Java service builds, web, real PostgreSQL/Kafka integration and the aggregate `ci` check.
+
 Initial local toolchain: Temurin 21.0.13+9, Maven 3.9.16, Node 22.17.0, npm 10.9.2, Helm 3.18.4, Docker 28.3.0. Java/Maven were downloaded into `/tmp/fieldsignal-toolchain` and verified against vendor SHA-256/SHA-512 metadata; they are not installed system-wide. The Maven dependency cache is `/tmp/fieldsignal-m2`. PostgreSQL 17.7 and Kafka 4.1.1 run through the local Compose stack. Ports: 55432, 9092, APIs 8081/8082, frontends 5173/5174.
 
 ## Remaining work
 
-- Run the GitHub workflow remotely and configure branch protections/owner approval.
+- Configure branch protections/owner approval around the verified `ci` check.
 - Publish independently versioned libraries, frontend packages/images, services, chart, schemas, proxy/configuration and release bundles.
 - Attach and verify signatures, provenance and SBOM for all promoted artifact types.
 - Add registry trust policy, vulnerability/contract checks, namespace roles and digest-only Kubernetes promotion with failure/rollback evidence.
