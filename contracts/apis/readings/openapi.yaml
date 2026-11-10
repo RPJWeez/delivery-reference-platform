@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: FieldSignal Reading Ingestion API
+  version: 1.0.0
+  description: Local synthetic-data API; gateway authentication is a later milestone.
+paths:
+  /api/readings:
+    get:
+      operationId: listReadings
+      responses:
+        '200':
+          description: Latest 100 readings, newest observation first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ReadingRecorded'}
+    post:
+      operationId: submitReading
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReadingRequest'}
+      responses:
+        '202':
+          description: Reading and outbox entry persisted; event publication is asynchronous
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReadingRecorded'}
+        '400': {description: Invalid reading}
+        '409': {description: Reading ID reused with a different payload}
+components:
+  schemas:
+    ReadingRequest:
+      type: object
+      required: [readingId, stationId, levelMeters, observedAt]
+      properties:
+        readingId: {type: string, format: uuid}
+        stationId: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,39}$'}
+        levelMeters: {type: number, minimum: 0, maximum: 30, multipleOf: 0.001}
+        observedAt:
+          type: string
+          format: date-time
+          description: No more than 60 seconds in the future
+    ReadingRecorded:
+      type: object
+      required: [eventId, eventType, schemaVersion, stationId, levelMeters, observedAt]
+      properties:
+        eventId: {type: string, format: uuid}
+        eventType: {type: string, enum: [ReadingRecorded]}
+        schemaVersion: {type: integer, enum: [1]}
+        stationId: {type: string}
+        levelMeters: {type: number}
+        observedAt: {type: string, format: date-time}

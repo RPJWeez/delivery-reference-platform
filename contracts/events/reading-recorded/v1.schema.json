@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fieldsignal.example/contracts/reading-recorded/v1",
+  "title": "ReadingRecorded v1",
+  "description": "Synthetic river-level observation. Kafka key is stationId; eventId is the reading's idempotency key. Additional fields permit compatible evolution.",
+  "type": "object",
+  "required": ["eventId", "eventType", "schemaVersion", "stationId", "levelMeters", "observedAt"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"const": "ReadingRecorded"},
+    "schemaVersion": {"const": 1},
+    "stationId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"},
+    "levelMeters": {"type": "number", "minimum": 0, "maximum": 30, "multipleOf": 0.001},
+    "observedAt": {"type": "string", "format": "date-time"}
+  }
+}

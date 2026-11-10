@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "releaseVersion",
+    "workloads"
+  ],
+  "properties": {
+    "releaseVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workloads": {
+      "type": "object",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]{0,39}$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "image",
+            "port",
+            "replicas"
+          ],
+          "properties": {
+            "image": {
+              "type": "string",
+              "pattern": "^ghcr\\.io/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 65535
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "livenessPath": {
+              "type": "string",
+              "pattern": "^/[a-zA-Z0-9/_-]+$"
+            },
+            "readinessPath": {
+              "type": "string",
+              "pattern": "^/[a-zA-Z0-9/_-]+$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

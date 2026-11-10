@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: FieldSignal Incident Operations API
+  version: 1.0.0
+paths:
+  /api/incidents:
+    get:
+      operationId: listIncidents
+      responses:
+        '200':
+          description: Latest 100 elevated observations, newest observation first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Incident'}
+  /api/incidents/{id}/acknowledge:
+    post:
+      operationId: acknowledgeIncident
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '204': {description: Acknowledged; repeated acknowledgment is safe}
+        '400': {description: Invalid UUID}
+        '404': {description: Unknown incident}
+components:
+  schemas:
+    Incident:
+      type: object
+      required: [readingId, stationId, levelMeters, severity, observedAt, status]
+      properties:
+        readingId: {type: string, format: uuid}
+        stationId: {type: string}
+        levelMeters: {type: number}
+        severity: {type: string, enum: [WATCH, CRITICAL]}
+        observedAt: {type: string, format: date-time}
+        status: {type: string, enum: [OPEN, ACKNOWLEDGED]}

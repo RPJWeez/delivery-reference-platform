@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "event-model": {
+      "path": "libraries/event-model",
+      "owner": "platform",
+      "kind": "library",
+      "dependencies": [
+        "measurements",
+        "reading-events"
+      ]
+    },
+    "readings-api": {
+      "path": "contracts/apis/readings",
+      "owner": "sensing",
+      "kind": "contract",
+      "dependencies": []
+    },
+    "reading-events": {
+      "path": "contracts/events/reading-recorded",
+      "owner": "sensing",
+      "kind": "contract",
+      "dependencies": []
+    },
+    "ingestion-service": {
+      "path": "apps/ingestion-service",
+      "owner": "sensing",
+      "kind": "service",
+      "dependencies": [
+        "event-model",
+        "readings-api",
+        "reading-events"
+      ]
+    },
+    "incident-service": {
+      "path": "apps/incident-service",
+      "owner": "response",
+      "kind": "service",
+      "dependencies": [
+        "event-model",
+        "reading-events",
+        "incidents-api"
+      ]
+    },
+    "application-chart": {
+      "path": "charts/application",
+      "owner": "platform",
+      "kind": "chart",
+      "dependencies": []
+    },
+    "measurements": {
+      "path": "libraries/measurements",
+      "owner": "platform",
+      "kind": "library",
+      "dependencies": []
+    },
+    "ui": {
+      "path": "libraries/ui",
+      "owner": "platform",
+      "kind": "library",
+      "dependencies": []
+    },
+    "incidents-api": {
+      "path": "contracts/apis/incidents",
+      "owner": "response",
+      "kind": "contract",
+      "dependencies": []
+    },
+    "station-console": {
+      "path": "apps/station-console",
+      "owner": "sensing",
+      "kind": "frontend",
+      "dependencies": [
+        "ui",
+        "readings-api"
+      ]
+    },
+    "operator-console": {
+      "path": "apps/operator-console",
+      "owner": "response",
+      "kind": "frontend",
+      "dependencies": [
+        "ui",
+        "incidents-api"
+      ]
+    }
+  },
+  "releaseUnits": {
+    "sensing": {
+      "owner": "sensing",
+      "namespace": "sensing",
+      "components": [
+        "ingestion-service",
+        "station-console"
+      ]
+    },
+    "response": {
+      "owner": "response",
+      "namespace": "response",
+      "components": [
+        "incident-service",
+        "operator-console"
+      ]
+    }
+  },
+  "globalBuildPaths": [
+    "pom.xml",
+    ".github/workflows",
+    "tools",
+    "catalog",
+    "Makefile",
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    ".dockerignore"
+  ],
+  "nonBuildPaths": [
+    "docs",
+    "README.md",
+    "LICENSE",
+    ".gitignore",
+    ".github/CODEOWNERS",
+    ".github/ISSUE_TEMPLATE",
+    ".github/dependabot.yml",
+    "releases",
+    "tests",
+    "infra",
+    "gateway"
+  ]
+}
