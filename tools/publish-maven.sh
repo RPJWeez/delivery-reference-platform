@@ -3,7 +3,7 @@
 # Existing release coordinates may only be reused when their bytes match.
 set -euo pipefail
 root="${1:?project root required}"
-: "${GITHUB_ACTOR:?}" "${GITHUB_TOKEN:?}"
+: "${GITHUB_ACTOR:?}" "${GITHUB_TOKEN:?}" "${GITHUB_REPOSITORY:?}"
 read -r group artifact version packaging < <(python3 - "$root/pom.xml" <<'PY'
 import sys, xml.etree.ElementTree as ET
 p = ET.parse(sys.argv[1]).getroot()
@@ -17,7 +17,7 @@ PY
 ./mvnw -B -ntp -Ppublished-dependencies -pl "$group:$artifact" -DskipTests package
 directory=$(mktemp -d)
 trap 'rm -rf "$directory"' EXIT
-base="https://maven.pkg.github.com/RPJWeez/delivery-reference-platform/${group//.//}/$artifact/$version/$artifact-$version"
+base="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${group//.//}/$artifact/$version/$artifact-$version"
 status=$(curl --silent --show-error --location --user "$GITHUB_ACTOR:$GITHUB_TOKEN" --output "$directory/pom" --write-out '%{http_code}' "$base.pom")
 if [[ "$status" == 200 ]]; then
   cmp "$root/pom.xml" "$directory/pom" || { echo 'Published POM differs: bump the component version'; exit 1; }

@@ -12,7 +12,8 @@ import uuid
 
 
 def call(port, path, payload=None):
-    request = Request(f"http://127.0.0.1:{port}{path}",
+    base = os.environ.get("INGESTION_URL" if port == 8081 else "INCIDENT_URL", f"http://127.0.0.1:{port}")
+    request = Request(base.rstrip("/") + path,
                       data=json.dumps(payload).encode() if payload is not None else None,
                       headers={"Content-Type": "application/json"})
     with urlopen(request, timeout=10) as response:

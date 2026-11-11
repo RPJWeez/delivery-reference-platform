@@ -36,8 +36,9 @@ runs:
         kubectl create namespace fieldsignal-qualification
         kubectl apply -n fieldsignal-qualification -f "$PLATFORM_ROOT/infra/qualification/dependencies.yaml"
         kubectl wait -n fieldsignal-qualification --for=condition=complete job/fieldsignal-test-topics --timeout=240s
+        kubectl rollout status -n fieldsignal-qualification deployment/fieldsignal-test-postgres --timeout=120s
         kubectl create namespace argocd
-        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/94037c4d4e1af4bd0651d37a179fbd9e347e668c/manifests/core-install.yaml
+        kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/94037c4d4e1af4bd0651d37a179fbd9e347e668c/manifests/core-install.yaml
         kubectl rollout status -n argocd deployment/argocd-repo-server --timeout=240s
         kubectl rollout status -n argocd statefulset/argocd-application-controller --timeout=240s
     - name: Reconcile exactly one application from the candidate digest
@@ -49,7 +50,9 @@ runs:
         set -euo pipefail
         [[ "$REFERENCE" =~ @sha256:[a-f0-9]{64}$ ]]
         kubectl apply -f bootstrap/project.yaml
-        kubectl create --dry-run=client -f environments/qualification/application.yaml -o json |
+        application=environments/qualification/application.yaml
+        if [[ ! -f "$application" ]]; then application="$application.example"; fi
+        kubectl create --dry-run=client -f "$application" -o json |
           jq --arg digest "${REFERENCE##*@}" --arg revision "$DEPLOYMENT_REVISION" \
             '.spec.sources[0].targetRevision = $digest | .spec.sources[1].targetRevision = $revision' |
           kubectl apply -f -
@@ -61,22 +64,26 @@ runs:
         PLATFORM_ROOT: ${{ github.action_path }}/../../..
         FIELDSIGNAL_TEST_NAMESPACE: fieldsignal-qualification
         KAFKA_TEST_BOOTSTRAP: fieldsignal-test-kafka:9092
+        STATION_URL: http://127.0.0.1:15173
+        OPERATIONS_URL: http://127.0.0.1:15174
+        INGESTION_URL: http://127.0.0.1:18081
+        INCIDENT_URL: http://127.0.0.1:18082
       run: |
         set -euo pipefail
         npm ci --prefix "$PLATFORM_ROOT"
         cd "$PLATFORM_ROOT"
         npx playwright install --with-deps chromium
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-station-console 5173:8080 > /tmp/stations.log 2>&1 &
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-station-console 15173:8080 > /tmp/stations.log 2>&1 &
         station_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-operator-console 5174:8080 > /tmp/operators.log 2>&1 &
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-operator-console 15174:8080 > /tmp/operators.log 2>&1 &
         operator_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-ingestion-service 8081:8080 > /tmp/ingestion.log 2>&1 &
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-ingestion-service 18081:8080 > /tmp/ingestion.log 2>&1 &
         ingestion_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-incident-service 8082:8080 > /tmp/incidents.log 2>&1 &
+        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-incident-service 18082:8080 > /tmp/incidents.log 2>&1 &
         incident_pid=$!
         trap 'kill "$station_pid" "$operator_pid" "$ingestion_pid" "$incident_pid" 2>/dev/null || true' EXIT
-        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:5173/healthz
-        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:5174/healthz
+        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15173/healthz
+        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15174/healthz
         npm run test:functional
         python3 tools/smoke.py
     - name: Record exact qualification inputs
@@ -109,3 +116,10 @@ runs:
         kubectl logs -n argocd statefulset/argocd-application-controller --tail=100 || true
         kubectl logs -n fieldsignal-qualification deployment/fieldsignal-ingestion-service --tail=100 || true
         kubectl logs -n fieldsignal-qualification deployment/fieldsignal-incident-service --tail=100 || true
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: failure()
+      with:
+        name: functional-failure-evidence
+        path: ${{ github.action_path }}/../../../test-results
+        retention-days: 14
+        if-no-files-found: ignore

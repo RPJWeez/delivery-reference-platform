@@ -32,7 +32,7 @@ jobs:
           extension=jar
           if [[ "$root" == . ]]; then extension=pom; fi
           mkdir -p .work/subjects
-          ./mvnw -N -B -ntp -Ppublished-dependencies dependency:copy -Dartifact="io.fieldsignal:$artifact:$version:$extension" -DoutputDirectory="$PWD/.work/subjects" -Dtransitive=false
+          ./mvnw -N -B -ntp -Ppublished-dependencies dependency:copy -Dartifact="$PROJECT:$version:$extension" -DoutputDirectory="$PWD/.work/subjects" -Dtransitive=false
           ./mvnw -B -ntp -Ppublished-dependencies -pl "$PROJECT" org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom
           echo "sbom=$root/target/bom.json" >> "$GITHUB_OUTPUT"
           echo "tag=$artifact-v$version" >> "$GITHUB_OUTPUT"
