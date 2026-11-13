@@ -465,7 +465,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p .work
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100&filter=latest" --jq '{jobs: [.[].jobs[]]}' > .work/jobs.json
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100&filter=latest" | jq '{jobs: [.[].jobs[]]}' > .work/jobs.json
       - name: Render actual execution results
         if: always()
         env:

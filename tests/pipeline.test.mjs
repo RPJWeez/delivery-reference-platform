@@ -492,3 +492,37 @@ test("writing a GitHub summary requires an explicit workflow flag", () =>
     run(cwd, "tools/pipeline/report.mjs", ["summary", "--github-summary"], env);
     assert.match(fs.readFileSync(summary, "utf8"), /Publishing disabled/);
   }));
+
+test("workflow job lookup paginates with supported GitHub CLI flags", () =>
+  temporary((cwd) => {
+    const workflow = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+    const step = workflow.jobs.report.steps.find(
+      (step) => step.name === "Read individual check results and log links",
+    );
+    write(
+      cwd,
+      "bin/gh",
+      `#!/usr/bin/env node
+const args=process.argv.slice(2);
+if(!args.includes('--paginate') || !args.includes('--slurp') || args.includes('--jq')) process.exit(1);
+console.log(JSON.stringify([{jobs:[{id:1,name:'Java — compile, test, package',conclusion:'success'}]},{jobs:[{id:2,name:'Frontend — build and typecheck',conclusion:'success'}]}]));
+`,
+    );
+    fs.chmodSync(path.join(cwd, "bin/gh"), 0o755);
+    execFileSync("bash", ["-euo", "pipefail", "-c", step.run], {
+      cwd,
+      env: isolatedEnvironment(cwd, {
+        PATH: `${cwd}/bin:${process.env.PATH}`,
+        GITHUB_REPOSITORY: "harbor/app",
+        GITHUB_RUN_ID: "123",
+      }),
+      stdio: "pipe",
+    });
+    const jobs = JSON.parse(
+      fs.readFileSync(path.join(cwd, ".work/jobs.json")),
+    ).jobs;
+    assert.deepEqual(
+      jobs.map((job) => job.id),
+      [1, 2],
+    );
+  }));
