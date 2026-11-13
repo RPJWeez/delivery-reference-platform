@@ -762,3 +762,70 @@ test("publishers handle skipped PR-only ancestors but still require successful m
       assert.equal(allowed("push", "success", "success", "failure"), false);
   }
 });
+
+test("large native metadata travels through a script file without environment limits or code injection", () =>
+  temporary((cwd) => {
+    const workflow = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+    const steps = workflow.jobs["publish-images"].steps;
+    const step = steps.find((s) => s.id === "metadata");
+    assert.equal(step.shell, "node {0}");
+    const expression = "${{ toJSON(steps.build.outputs.metadata) }}";
+    assert(step.run.includes(expression));
+    for (const s of steps)
+      assert(
+        !JSON.stringify(s.env || {}).includes("steps.build.outputs.metadata"),
+      );
+    const payload = JSON.stringify({
+      api: {
+        "containerimage.digest": `sha256:${"a".repeat(64)}`,
+        "buildx.build.provenance": {
+          padding: "x".repeat(2 * 1024 * 1024),
+          adversarial:
+            '"; require("node:fs").writeFileSync("INJECTED", "bad"); //\nEOF\n$(touch INJECTED)\n`touch INJECTED`\n${process.exit(1)}\n雪 🐋',
+        },
+      },
+    });
+    const file = path.join(cwd, "persist.sh");
+    fs.writeFileSync(
+      file,
+      step.run.replace(expression, JSON.stringify(payload)),
+    );
+    execFileSync(process.execPath, [file], {
+      cwd,
+      env: isolatedEnvironment(cwd),
+    });
+    assert.equal(
+      fs.readFileSync(path.join(cwd, ".work/metadata.json"), "utf8"),
+      payload,
+    );
+    assert.equal(fs.existsSync(path.join(cwd, "INJECTED")), false);
+    const record = steps.find(
+      (s) => s.name === "Record native build outputs immediately",
+    );
+    assert.match(record.if, /steps.metadata.outcome == 'success'/);
+    assert.doesNotMatch(record.run, /\$METADATA|outputs.metadata/);
+  }));
+
+test("missing or malformed metadata fails before a publication record can be produced", () =>
+  temporary((cwd) => {
+    const { jobs } = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+    const step = jobs["publish-images"].steps.find((s) => s.id === "metadata");
+    for (const payload of ["", null, "{bad json", "[]", "null"]) {
+      const file = path.join(cwd, "persist.sh");
+      fs.writeFileSync(
+        file,
+        step.run.replace(
+          "${{ toJSON(steps.build.outputs.metadata) }}",
+          JSON.stringify(payload),
+        ),
+      );
+      assert.throws(() =>
+        execFileSync(process.execPath, [file], {
+          cwd,
+          env: isolatedEnvironment(cwd),
+          stdio: "pipe",
+        }),
+      );
+      assert.equal(fs.existsSync(path.join(cwd, ".work/metadata.json")), false);
+    }
+  }));

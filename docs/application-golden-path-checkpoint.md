@@ -88,3 +88,13 @@ run 43525491538: validation passed but all publishers skipped because the PR-onl
 ancestor was skipped. Publisher jobs now explicitly handle skipped ancestors with always()
 while requiring successful validation/prerequisites and a main push. No merge/deployment
 performed. Summary-isolation/explicit-write and partial-publication coverage preserved.
+
+Metadata handoff follow-up (codex/bake-metadata-file): main run 43527456691 pushed
+all four images, then failed to launch Bash for the recording step because full native
+provenance JSON exceeded the per-environment-value process limit. Image evidence and
+candidate packaging were skipped; no complete candidate was established. Metadata now
+uses an escaped JSON string literal in a runner-written Node script file, then ordinary
+file reads. No large metadata environment/argv value, shell interpolation or provenance
+truncation remains. Tests round-trip a 2 MiB payload with hostile quoting/command text,
+reject missing/malformed metadata, and retain summary-write isolation coverage. No
+registry artifacts deleted, main rerun, merge or shared deployment performed.
