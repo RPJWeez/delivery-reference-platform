@@ -61,3 +61,5 @@ CI and publication workflows, signed artifact evidence, a reusable chart, and re
 This is a free-tier demonstration: public repositories/packages, standard hosted runners, disposable kind clusters and local Argo CD. No permanent cloud resources or paid Apigee instance are created. Apigee integration remains a future optional adapter; frontend development proxies are not an Apigee implementation.
 
 The repository has not been assigned an open-source license.
+
+See [pipeline operation and template contract](docs/pipeline.md) for run summaries, validation stages, SBOM locations, configuration, and qualification caller migration.

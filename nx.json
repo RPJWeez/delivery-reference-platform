@@ -18,7 +18,10 @@
       "{workspaceRoot}/tsconfig.json",
       "{workspaceRoot}/.mvn/**/*",
       "{workspaceRoot}/.github/workflows/**/*",
-      "{workspaceRoot}/.dockerignore"
+      "{workspaceRoot}/.dockerignore",
+      "{workspaceRoot}/.github/actions/**/*",
+      "{workspaceRoot}/tools/pipeline/**/*",
+      "{workspaceRoot}/tools/publish-maven.sh"
     ]
   },
   "targetDefaults": {
@@ -34,6 +37,18 @@
     },
     "mvn-package": {
       "cache": true
+    },
+    "container": {
+      "inputs": ["default", "^default"]
+    },
+    "publish-maven": {
+      "inputs": ["default", "^default"]
+    },
+    "chart-package": {
+      "inputs": ["default", "^default"]
+    },
+    "mvn-verify": {
+      "inputs": ["default", "^default"]
     }
   }
 }

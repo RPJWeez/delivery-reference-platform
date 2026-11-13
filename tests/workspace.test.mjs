@@ -22,11 +22,11 @@ test("Maven evidence resolves POM coordinates independently of Nx names", () => 
     (step) => step.id === "artifact",
   ).run;
   for (const [project, root, coordinate] of [
-    ["fieldsignal", ".", "io.fieldsignal:fieldsignal-parent:0.1.0:pom"],
+    ["fieldsignal", ".", "io.fieldsignal:fieldsignal-parent:0.1.1:pom"],
     [
       "io.fieldsignal:event-model",
       "libraries/event-model",
-      "io.fieldsignal:event-model:0.1.0:jar",
+      "io.fieldsignal:event-model:0.1.1:jar",
     ],
   ]) {
     const directory = mkdtempSync(
@@ -67,7 +67,7 @@ test("Maven evidence resolves POM coordinates independently of Nx names", () => 
       );
       assert(
         readFileSync(join(directory, "output"), "utf8").includes(
-          `tag=${coordinate.split(":")[1]}-v0.1.0`,
+          `tag=${coordinate.split(":")[1]}-v${coordinate.split(":")[2]}`,
         ),
       );
     } finally {

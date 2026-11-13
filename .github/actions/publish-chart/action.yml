@@ -1,11 +1,14 @@
 name: Publish an immutable Helm chart
 description: Reuse identical chart content; refuse a changed chart under an existing version.
 inputs:
+  project:
+    required: false
+    description: Nx project identifier for reporting
   chart: { required: true, description: Chart directory }
   registry:
     {
       required: true,
-      description: "OCI registry parent path, e.g. ghcr.io/rpjweez/charts",
+      description: "OCI registry parent path, e.g. ghcr.io/owner/charts",
     }
   token: { required: true, description: Package publishing token }
 outputs:
@@ -32,6 +35,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
+        REGISTRY="${REGISTRY,,}"
         mkdir -p .work/charts/new .work/charts/existing
         echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
         helm package "$CHART" --destination .work/charts/new
@@ -59,16 +63,27 @@ runs:
         assert content(sys.argv[1]) == content(sys.argv[2]), 'Chart changed: increment its version instead of overwriting it'
         PY
           archive="$existing"
+          outcome=reused
         else
+          outcome=published
           helm push "$archive" "oci://$REGISTRY"
         fi
         mkdir -p .work/charts/resolved
         helm pull "oci://$REGISTRY/$name" --version "$version" --destination .work/charts/resolved > .work/charts/resolved.log 2>&1
         digest=$(sed -n 's/^Digest: //p' .work/charts/resolved.log)
         [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { cat .work/charts/resolved.log; exit 1; }
+        echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
         echo "package=$archive" >> "$GITHUB_OUTPUT"
         echo "digest=$digest" >> "$GITHUB_OUTPUT"
         echo "reference=$REGISTRY/$name@$digest" >> "$GITHUB_OUTPUT"
+    - name: Record chart publication before evidence generation
+      shell: bash
+      env:
+        PROJECT: ${{ inputs.project || inputs.chart }}
+        REFERENCE: ${{ steps.package.outputs.reference }}
+        DIGEST: ${{ steps.package.outputs.digest }}
+        OUTCOME: ${{ steps.package.outputs.outcome }}
+      run: node "$GITHUB_ACTION_PATH/../../../tools/pipeline/report.mjs" record "$PROJECT" chart "$OUTCOME" "$REFERENCE" "" "$DIGEST" "evidence generation pending"
     - name: Extract published chart for SBOM inventory
       id: inventory
       shell: bash
@@ -102,3 +117,16 @@ runs:
       run: |
         echo "$TOKEN" | cosign login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
         cosign sign --yes "$REFERENCE"
+    - name: Retain chart evidence and record publication
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REFERENCE: ${{ steps.package.outputs.reference }}
+        ARCHIVE: ${{ steps.package.outputs.package }}
+        DIGEST: ${{ steps.package.outputs.digest }}
+      run: |
+        tag="chart-$(basename "$ARCHIVE" .tgz)"
+        sbom=".work/charts/$(basename "$ARCHIVE" .tgz)-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.spdx.json"
+        cp .work/charts/chart.spdx.json "$sbom"
+        bash "$GITHUB_ACTION_PATH/../../../tools/pipeline/retain-release.sh" "$tag" "$ARCHIVE" "$sbom"
+        node "$GITHUB_ACTION_PATH/../../../tools/pipeline/report.mjs" record "${{ inputs.project || inputs.chart }}" chart "${{ steps.package.outputs.outcome }}" "$REFERENCE" "" "$DIGEST" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag"

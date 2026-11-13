@@ -51,6 +51,14 @@ jobs:
           TAG: ${{ steps.artifact.outputs.tag }}
           SBOM: ${{ steps.artifact.outputs.sbom }}
         run: |
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" .work/subjects/* "$SBOM" --target "$GITHUB_SHA" --title "$TAG" --notes 'Immutable Maven artifact. Verify its signed provenance and SBOM using gh attestation verify.'
-          fi
+          sbom=".work/$TAG-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.cdx.json"
+          cp "$SBOM" "$sbom"
+          bash tools/pipeline/retain-release.sh "$TAG" .work/subjects/* "$sbom"
+          node tools/pipeline/report.mjs record "${{ inputs.project }}" maven-evidence retained "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" "" "" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: results-java-evidence-${{ steps.artifact.outputs.tag }}
+          path: .work/results
+          include-hidden-files: true
+          if-no-files-found: ignore
