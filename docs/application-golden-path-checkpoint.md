@@ -98,3 +98,13 @@ file reads. No large metadata environment/argv value, shell interpolation or pro
 truncation remains. Tests round-trip a 2 MiB payload with hostile quoting/command text,
 reject missing/malformed metadata, and retain summary-write isolation coverage. No
 registry artifacts deleted, main rerun, merge or shared deployment performed.
+
+Candidate Helm follow-up (codex/candidate-helm-global): run 43529193233 reached
+candidate lint after image evidence, but Helm injected an empty `global` into the
+application subchart and the strict root schema rejected it. Schema now permits only
+an empty global object; arbitrary global keys and mutable image overrides still fail.
+A regression reproduced the original failure before the fix, then exercised complete
+wrapper binding, local dependency vendoring, lint, versioned packaging, archive rendering,
+image-closure validation and negative override checks. All 42 focused tests and actionlint
+passed. Candidate publication was not reached in the failed run; no artifacts were deleted
+and no merge/main rerun/shared deployment was performed by this fix.
