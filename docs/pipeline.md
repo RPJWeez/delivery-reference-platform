@@ -4,11 +4,13 @@ The workflow validates PR merge commits and publishes on pushes to main. Standal
 
 ## Reading a run
 
-Open **Run report** in the Actions run summary. It shows a visual execution map, the baseline and why it was selected, changed files, affected publication projects and dependency paths, job outcomes, artifact coordinates/checksums, and evidence links. Download `run-report` for the corresponding JSON. Intermediate `results-*` artifacts preserve individual job results and the selection plan.
+Open **Run report** in the Actions run summary. The headline says whether validation passed. A PR report immediately states that publishing is disabled; it has no publication table. The checks table lists Java, frontend, regression tests, and Helm lint individually, with direct job links and failed test names when available. A failed aggregate validation gate is explained as the consequence of the failed check.
 
-Publication results are recorded immediately after registry operations, before evidence generation. A later evidence failure therefore does not hide a successfully published artifact. An absent completion record does not prove the registry is unchanged: an external operation can succeed before the runner records its result. The report calls this out rather than inventing a successful or skipped result. A wholly cancelled workflow may not finish its final report.
+**Affected projects** lists the planned checks and explains whether project files, a dependency, or shared pipeline inputs triggered selection. It describes selected work, not published artifacts. Full commit IDs and changed files are collapsed under **Comparison and changed files**. Download `run-report` for both the Markdown and machine-readable JSON. Intermediate `results-*` artifacts preserve the plan and individual job results; `validation-*` artifacts retain validation logs and available Java test reports.
 
-The graph notation `consumer → dependency` explains transitive impact. Shared/root inputs and Nx-specific inference can select projects without a direct source path; these are explicitly labeled. The selected project set comes from Nx, not a separate dependency model.
+Main runs additionally show **Publication** with only observed successful publication/reuse records, destinations, versions, and evidence links. Selected components without records appear separately: a blocked publisher is **not attempted**, while a publisher that ran without a completion record is **unconfirmed**. Digests are collapsed into a separate table. Publication results are recorded immediately after registry operations, before evidence generation, so an evidence failure does not hide a successfully published artifact. A wholly cancelled workflow may not finish its final report.
+
+Every result is bound to its repository, workflow run, attempt, commit, and event. Stale or malformed files are ignored with a diagnostic. PR reports reject publication records even if one is accidentally present. The renderer writes GitHub’s summary only with the workflow’s explicit `--github-summary` flag. Test subprocesses use temporary summary/output files and remove inherited GitHub/Nx execution context, preventing fictional fixture data from appearing in real summaries.
 
 ## Validation stages
 

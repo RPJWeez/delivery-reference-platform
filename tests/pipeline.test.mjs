@@ -18,11 +18,29 @@ function write(cwd, file, value) {
   fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
   fs.writeFileSync(path.join(cwd, file), value);
 }
+function isolatedEnvironment(cwd, overrides = {}) {
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) =>
+        !/^(GITHUB_|GH_|RUNNER_|ACTIONS_|NX_|NODE_TEST_)/.test(name) &&
+        name !== "NODE_AUTH_TOKEN",
+    ),
+  );
+  return {
+    ...env,
+    NX_DAEMON: "false",
+    NX_NO_CLOUD: "true",
+    GITHUB_STEP_SUMMARY: path.join(cwd, ".work/github-summary.md"),
+    GITHUB_OUTPUT: path.join(cwd, "output"),
+    NPM_CONFIG_USERCONFIG: path.join(cwd, "npmrc"),
+    ...overrides,
+  };
+}
 const run = (cwd, script, args = [], env = {}) =>
   execFileSync(process.execPath, [path.join(root, script), ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, ...env },
+    env: isolatedEnvironment(cwd, env),
   });
 test("a second application selects changed components, consumers, chart and shared inputs", () =>
   temporary((cwd) => {
@@ -83,6 +101,14 @@ test("summary preserves partial publication and planning reasons after failure",
       cwd,
       ".work/results/plan.json",
       JSON.stringify({
+        schemaVersion: 1,
+        run: {
+          repository: "local",
+          id: "local",
+          attempt: "1",
+          sha: "local",
+          event: "local",
+        },
         kind: "plan",
         base: "abc",
         reason: "last-successful-main-workflow",
@@ -99,10 +125,10 @@ test("summary preserves partial publication and planning reasons after failure",
       "sha256:123",
     ]);
     run(cwd, "tools/pipeline/report.mjs", ["summary"], {
-      GITHUB_SHA: "def",
       JOB_RESULTS: JSON.stringify({
         "publish-java": { result: "success" },
         "publish-images": { result: "failure" },
+        ci: { result: "failure" },
       }),
     });
     const report = JSON.parse(
@@ -114,9 +140,9 @@ test("summary preserves partial publication and planning reasons after failure",
       path.join(cwd, ".work/summary.md"),
       "utf8",
     );
-    assert.match(markdown, /Images ❌/);
+    assert.match(markdown, /Validation failed/);
     assert.match(markdown, /2\.0\.0/);
-    assert.match(markdown, /booking-api → pricing-core/);
+    assert.match(markdown, /Depends on changed project: pricing-core/);
   }));
 test("all workflow YAML parses and publication stays gated by validation", () => {
   for (const file of ["ci.yml", "java-evidence.yml"])
@@ -172,7 +198,7 @@ if(a[1]==='download')fs.copyFileSync(path.join(store,a[a.indexOf('--pattern')+1]
     );
     fs.chmodSync(path.join(cwd, "bin/gh"), 0o755);
     const env = {
-      ...process.env,
+      ...isolatedEnvironment(cwd),
       PATH: `${cwd}/bin:${process.env.PATH}`,
       STORE: cwd,
       GITHUB_SHA: "abc",
@@ -211,7 +237,7 @@ test("main baseline retries failed publication ranges and bootstraps only when h
         cwd,
         encoding: "utf8",
         env: {
-          ...process.env,
+          ...isolatedEnvironment(cwd),
           PATH: `${cwd}/bin:${process.env.PATH}`,
           GITHUB_REPOSITORY: "harbor/app",
           PR_BASE: "",
@@ -227,4 +253,242 @@ test("main baseline retries failed publication ranges and bootstraps only when h
       invoke({ SUCCESS_SHA: "" }),
       /^[a-f0-9]+ bootstrap-empty-tree$/,
     );
+  }));
+
+// Reproduce the runner environment that originally redirected fixture output
+// into GitHub's real step summary and made the local summary assertion fail.
+test("summary tests leave GitHub runner files untouched", () =>
+  temporary((cwd) => {
+    const runnerSummary = path.join(cwd, "runner-summary.md");
+    const runnerOutput = path.join(cwd, "runner-output");
+    fs.writeFileSync(runnerSummary, "runner summary sentinel\n");
+    fs.writeFileSync(runnerOutput, "runner output sentinel\n");
+    const output = execFileSync(
+      process.execPath,
+      [
+        "--test",
+        "--test-name-pattern=^summary preserves partial publication",
+        path.join(root, "tests/pipeline.test.mjs"),
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...isolatedEnvironment(cwd),
+          GITHUB_STEP_SUMMARY: runnerSummary,
+          GITHUB_OUTPUT: runnerOutput,
+          GITHUB_EVENT_NAME: "pull_request",
+          GITHUB_RUN_ID: "real-run",
+          GITHUB_RUN_ATTEMPT: "4",
+          GITHUB_SHA: "real-commit",
+          NX_BASE: "runner-base",
+          NX_HEAD: "runner-head",
+        },
+      },
+    );
+    assert.match(output, /ok \d+ - summary preserves partial publication/);
+    assert.equal(
+      fs.readFileSync(runnerSummary, "utf8"),
+      "runner summary sentinel\n",
+    );
+    assert.equal(
+      fs.readFileSync(runnerOutput, "utf8"),
+      "runner output sentinel\n",
+    );
+  }));
+function planFixture(cwd, env, fields = {}) {
+  write(
+    cwd,
+    ".work/results/plan.json",
+    JSON.stringify({
+      schemaVersion: 1,
+      run: {
+        repository: "local",
+        id: "local",
+        attempt: "1",
+        sha: "local",
+        event: env.GITHUB_EVENT_NAME || "local",
+      },
+      kind: "plan",
+      base: "base-commit",
+      head: "merge-commit",
+      reason:
+        env.GITHUB_EVENT_NAME === "pull_request"
+          ? "pr-target"
+          : "last-successful-main-workflow",
+      files: ["services/booking/source.txt"],
+      direct: ["booking-api"],
+      selected: { images: ["booking-api"], libraries: [], npm: [], chart: [] },
+      validation: { java: ["booking-api"], build: [], typecheck: [] },
+      reasons: { "booking-api": "booking-api" },
+      ...fields,
+    }),
+  );
+}
+test("PR summary states validation only and rejects publication claims", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "pull_request",
+      JOB_RESULTS: JSON.stringify({
+        ci: { result: "failure" },
+        validate: { result: "failure" },
+        "publish-images": { result: "skipped" },
+      }),
+    };
+    planFixture(cwd, env);
+    run(
+      cwd,
+      "tools/pipeline/report.mjs",
+      [
+        "record",
+        "pricing-core",
+        "maven",
+        "published",
+        "https://registry.example/harbor",
+        "2.0.0",
+      ],
+      env,
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const report = JSON.parse(
+      fs.readFileSync(path.join(cwd, ".work/run-report.json")),
+    );
+    const markdown = fs.readFileSync(
+      path.join(cwd, ".work/summary.md"),
+      "utf8",
+    );
+    assert.equal(report.results.length, 0);
+    assert.match(markdown, /# Pull request checks — Validation failed/);
+    assert.match(markdown, /Publishing disabled/);
+    assert.match(markdown, /No packages, images, or charts were published/);
+    assert.doesNotMatch(
+      markdown,
+      /pricing-core|registry.example|## Publication|Artifact results/,
+    );
+    assert.match(markdown, /Files changed in this project/);
+  }));
+test("main summary distinguishes blocked work from uncertain publication", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "push",
+      JOB_RESULTS: JSON.stringify({
+        ci: { result: "failure" },
+        "publish-images": { result: "skipped" },
+      }),
+    };
+    planFixture(cwd, env);
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const markdown = fs.readFileSync(
+      path.join(cwd, ".work/summary.md"),
+      "utf8",
+    );
+    assert.match(markdown, /Not attempted: validation did not pass/);
+    assert.doesNotMatch(markdown, /Publication unconfirmed/);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(cwd, ".work/run-report.json")))
+        .results.length,
+      0,
+    );
+  }));
+test("stale publication results cannot appear in another run or attempt", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "push",
+      JOB_RESULTS: JSON.stringify({ ci: { result: "success" } }),
+    };
+    planFixture(cwd, env, {
+      selected: {},
+      reasons: {},
+      validation: {},
+      files: [],
+    });
+    run(
+      cwd,
+      "tools/pipeline/report.mjs",
+      [
+        "record",
+        "stale-project",
+        "image",
+        "published",
+        "ghcr.io/other/image",
+        "",
+        "sha256:old",
+      ],
+      { ...env, GITHUB_RUN_ATTEMPT: "9" },
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const report = JSON.parse(
+      fs.readFileSync(path.join(cwd, ".work/run-report.json")),
+    );
+    assert.equal(report.results.length, 0);
+    const markdown = fs.readFileSync(
+      path.join(cwd, ".work/summary.md"),
+      "utf8",
+    );
+    assert.doesNotMatch(markdown, /stale-project|sha256:old/);
+    assert.match(markdown, /Ignored a result file/);
+    assert.match(markdown, /No affected projects were selected/);
+  }));
+test("summary identifies the failing test and links its actual job", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "pull_request",
+      JOB_RESULTS: JSON.stringify({ ci: { result: "failure" } }),
+    };
+    planFixture(cwd, env);
+    write(
+      cwd,
+      ".work/validation.log",
+      "TAP version 13\nnot ok 2 - summary must isolate runner files\n",
+    );
+    run(
+      cwd,
+      "tools/pipeline/report.mjs",
+      [
+        "validation",
+        "Pipeline and Helm regression tests",
+        "failure",
+        "skipped",
+      ],
+      env,
+    );
+    write(
+      cwd,
+      ".work/jobs.json",
+      JSON.stringify({
+        jobs: [
+          {
+            name: "Pipeline and Helm regression tests",
+            conclusion: "failure",
+            html_url: "https://github.com/harbor/app/actions/runs/123/job/456",
+            steps: [{ name: "Execute validation", conclusion: "failure" }],
+          },
+        ],
+      }),
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const markdown = fs.readFileSync(
+      path.join(cwd, ".work/summary.md"),
+      "utf8",
+    );
+    assert.match(markdown, /summary must isolate runner files/);
+    assert.match(
+      markdown,
+      /https:\/\/github.com\/harbor\/app\/actions\/runs\/123\/job\/456/,
+    );
+    assert.doesNotMatch(markdown, /## Publication/);
+  }));
+
+test("writing a GitHub summary requires an explicit workflow flag", () =>
+  temporary((cwd) => {
+    const summary = path.join(cwd, "github-summary.md");
+    const env = {
+      GITHUB_EVENT_NAME: "pull_request",
+      GITHUB_STEP_SUMMARY: summary,
+    };
+    planFixture(cwd, env);
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    assert.equal(fs.existsSync(summary), false);
+    run(cwd, "tools/pipeline/report.mjs", ["summary", "--github-summary"], env);
+    assert.match(fs.readFileSync(summary, "utf8"), /Publishing disabled/);
   }));

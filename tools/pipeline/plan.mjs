@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { matchesGlob } from "node:path";
+import { runIdentity } from "./context.mjs";
 import { execFileSync } from "node:child_process";
 const selection = JSON.parse(process.env.SELECTION);
 const { graph } = JSON.parse(fs.readFileSync(".work/graph.json"));
@@ -33,8 +35,26 @@ const selected = Object.fromEntries(
     JSON.parse(selection[key] || "[]"),
   ]),
 );
+const validation = Object.fromEntries(
+  ["java", "build", "typecheck"].map((key) => [
+    key,
+    JSON.parse(selection[key] || "[]"),
+  ]),
+);
+const sharedInputs =
+  JSON.parse(fs.readFileSync("nx.json")).namedInputs?.sharedGlobals || [];
+const sharedFiles = files.filter((file) =>
+  sharedInputs.some((pattern) =>
+    matchesGlob(file, pattern.replace("{workspaceRoot}/", "")),
+  ),
+);
 const reasons = Object.fromEntries(
-  [...new Set(Object.values(selected).flat())].map((name) => [
+  [
+    ...new Set([
+      ...Object.values(selected).flat(),
+      ...Object.values(validation).flat(),
+    ]),
+  ].map((name) => [
     name,
     chain(name)?.join(" → ") ||
       "Shared/root input or Nx inferred dependency change",
@@ -42,6 +62,10 @@ const reasons = Object.fromEntries(
 );
 const plan = {
   kind: "plan",
+  schemaVersion: 1,
+  run: runIdentity(),
+  validation,
+  sharedFiles,
   base: process.env.BASE,
   head: process.env.GITHUB_SHA,
   reason: process.env.BASE_REASON,

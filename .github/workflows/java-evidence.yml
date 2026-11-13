@@ -60,4 +60,5 @@ jobs:
         with:
           name: results-java-evidence-${{ steps.artifact.outputs.tag }}
           path: .work/results
+          include-hidden-files: true
           if-no-files-found: ignore

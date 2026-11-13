@@ -48,6 +48,9 @@ jobs:
           echo "images=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=container --json)" >> "$GITHUB_OUTPUT"
           echo "libraries=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=publish-maven --json)" >> "$GITHUB_OUTPUT"
           echo "npm=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --projects=tag:type:npm-library --json)" >> "$GITHUB_OUTPUT"
+          echo "java=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=mvn-verify --json)" >> "$GITHUB_OUTPUT"
+          echo "build=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=build --json)" >> "$GITHUB_OUTPUT"
+          echo "typecheck=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=typecheck --json)" >> "$GITHUB_OUTPUT"
           echo "chart=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=chart-package --json)" >> "$GITHUB_OUTPUT"
       - name: Explain affected selection
         env:
@@ -62,6 +65,7 @@ jobs:
         with:
           name: results-plan
           path: .work/plan.json
+          include-hidden-files: true
 
   validate:
     name: ${{ matrix.name }}
@@ -90,19 +94,44 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
         with: { version: v3.18.4 }
       - name: Execute validation
-        run: ${{ matrix.command }}
+        id: check
+        env:
+          VALIDATION_COMMAND: ${{ matrix.command }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .work
+          bash -euo pipefail -c "$VALIDATION_COMMAND" 2>&1 | tee .work/validation.log
       - name: Lint Helm charts
+        id: lint
         if: matrix.name == 'Pipeline and Helm regression tests'
         run: |
           for chart in $(npx nx show projects --with-target=chart-package --json | jq -r '.[]'); do
             root=$(npx nx show project "$chart" --json | jq -r .root)
             helm lint "$root" -f "$root/ci/values.yaml"
           done
+      - name: Record validation result
+        if: always()
+        env:
+          CHECK_NAME: ${{ matrix.name }}
+          CHECK_RESULT: ${{ job.status }}
+          LINT_RESULT: ${{ steps.lint.outcome }}
+        run: node tools/pipeline/report.mjs validation "$CHECK_NAME" "$CHECK_RESULT" "$LINT_RESULT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: results-validation-${{ strategy.job-index }}
+          path: .work/results
+          include-hidden-files: true
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: validation-${{ strategy.job-index }}
-          path: "**/target/surefire-reports/**"
+          path: |
+            .work/validation.log
+            **/target/surefire-reports/**
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
@@ -142,6 +171,7 @@ jobs:
         with:
           name: results-publish-java-${{ strategy.job-index || '0' }}
           path: .work/results
+          include-hidden-files: true
           if-no-files-found: ignore
 
   java-evidence:
@@ -249,6 +279,7 @@ jobs:
         with:
           name: results-publish-npm-${{ strategy.job-index || '0' }}
           path: .work/results
+          include-hidden-files: true
           if-no-files-found: ignore
 
   publish-images:
@@ -364,6 +395,7 @@ jobs:
         with:
           name: results-publish-images-${{ strategy.job-index || '0' }}
           path: .work/results
+          include-hidden-files: true
           if-no-files-found: ignore
 
   publish-chart:
@@ -400,10 +432,14 @@ jobs:
         with:
           name: results-publish-chart-${{ strategy.job-index || '0' }}
           path: .work/results
+          include-hidden-files: true
           if-no-files-found: ignore
 
   report:
     name: Run report
+    permissions:
+      contents: read
+      actions: read
     needs:
       [
         plan,
@@ -423,13 +459,23 @@ jobs:
         with:
           pattern: results-*
           path: .work/results
+      - name: Read individual check results and log links
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .work
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100&filter=latest" --jq '{jobs: [.[].jobs[]]}' > .work/jobs.json
       - name: Render actual execution results
         if: always()
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
-        run: node tools/pipeline/report.mjs summary
+        run: node tools/pipeline/report.mjs summary --github-summary
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: run-report
-          path: .work/run-report.json
+          path: |
+            .work/run-report.json
+            .work/summary.md
+          include-hidden-files: true
