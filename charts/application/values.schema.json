@@ -73,6 +73,11 @@
           }
         }
       }
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Helm injects this object into subcharts. No global application overrides are supported."
     }
   }
 }
