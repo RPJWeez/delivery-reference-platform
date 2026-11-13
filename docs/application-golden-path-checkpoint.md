@@ -73,3 +73,10 @@ were pushed to origin/codex/application-golden-path. Companion implementation `1
 was pushed under the same branch name and pins source machinery at `2a194dc`. GitHub
 connector draft-PR creation returned HTTP 403 for both repositories; no PR-triggered CI
 was started. Open review PRs from the pushed branches after resolving that access boundary.
+
+PR #11 follow-up: run 43524557767 passed Java, frontend and regression checks but
+Container source build failed because docker/bake-action defaulted to a remote Git
+context, where the runner-generated .work/cache.json does not exist. Both PR and main
+Bake actions now explicitly use source: . (the checked-out workspace). Pipeline regression
+tests and actionlint passed locally; the push requests a fresh PR run. No permissions,
+publication gates or summary-write behavior changed.

@@ -519,3 +519,30 @@ test("complete candidate reporting stays separate from fragments and PR claims",
       }),
     );
   }));
+
+test("Bake actions use the checkout containing generated cache overlays", () => {
+  const { jobs } = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+  for (const name of ["container-validate", "publish-images"]) {
+    const job = jobs[name];
+    const index = job.steps.findIndex((step) =>
+      step.uses?.startsWith("docker/bake-action@"),
+    );
+    const bake = job.steps[index];
+    assert.equal(
+      bake.with.source,
+      ".",
+      `${name} must not use the remote Git default`,
+    );
+    assert(bake.with.files.split("\n").includes(".work/cache.json"));
+    assert(
+      job.steps
+        .slice(0, index)
+        .some((step) => step.uses?.startsWith("actions/checkout@")),
+    );
+    assert(
+      job.steps
+        .slice(0, index)
+        .some((step) => step.run?.includes("> .work/cache.json")),
+    );
+  }
+});
