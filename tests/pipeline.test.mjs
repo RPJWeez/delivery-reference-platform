@@ -83,7 +83,7 @@ test("a second application selects changed components, consumers, chart and shar
     assert.deepEqual(affected("modules/rates/source.txt", "container"), [
       "booking-api",
     ]);
-    assert.deepEqual(affected("modules/rates/source.txt", "publish-maven"), [
+    assert.deepEqual(affected("modules/rates/source.txt", "build"), [
       "pricing-core",
     ]);
     assert.deepEqual(affected("deploy/shared/values.yaml", "chart-package"), [
@@ -145,44 +145,15 @@ test("summary preserves partial publication and planning reasons after failure",
     assert.match(markdown, /Depends on changed project: pricing-core/);
   }));
 test("all workflow YAML parses and publication stays gated by validation", () => {
-  for (const file of ["ci.yml", "java-evidence.yml"])
+  for (const file of ["ci.yml"])
     parse(fs.readFileSync(`.github/workflows/${file}`, "utf8"));
   for (const action of ["setup", "qualify", "publish-chart"])
     parse(fs.readFileSync(`.github/actions/${action}/action.yml`, "utf8"));
   const { jobs } = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
   assert.equal(jobs.report.if, "always()");
-  for (const name of [
-    "publish-java",
-    "publish-npm",
-    "publish-images",
-    "publish-chart",
-  ])
+  for (const name of ["image-evidence", "publish-images", "publish-chart"])
     assert(jobs[name].needs.includes("ci"));
 });
-test("registry scopes do not redirect third party dependencies", () =>
-  temporary((cwd) => {
-    write(
-      cwd,
-      "tools/pipeline/config.json",
-      JSON.stringify({ npmRegistry: "https://registry.example" }),
-    );
-    write(cwd, "package.json", JSON.stringify({ workspaces: ["modules/*"] }));
-    write(
-      cwd,
-      "modules/widgets/package.json",
-      JSON.stringify({
-        name: "@harbor/widgets",
-        publishConfig: { registry: "https://registry.example" },
-        dependencies: { "@external/util": "1.0.0" },
-      }),
-    );
-    run(cwd, "tools/pipeline/npm-scopes.mjs", [], {
-      NPM_CONFIG_USERCONFIG: path.join(cwd, "npmrc"),
-    });
-    const config = fs.readFileSync(path.join(cwd, "npmrc"), "utf8");
-    assert.match(config, /@harbor:registry=https:\/\/registry.example/);
-    assert.doesNotMatch(config, /@external/);
-  }));
 test("release retention repairs missing assets and refuses conflicting immutable bytes", () =>
   temporary((cwd) => {
     write(
@@ -526,3 +497,52 @@ console.log(JSON.stringify([{jobs:[{id:1,name:'Java — compile, test, package',
       [1, 2],
     );
   }));
+
+test("complete candidate reporting stays separate from fragments and PR claims", () =>
+  temporary((cwd) => {
+    const env = { GITHUB_EVENT_NAME: "push" };
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    assert.match(
+      fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8"),
+      /No complete candidate handoff/,
+    );
+    const candidate = `ghcr.io/harbor/tide@sha256:${"a".repeat(64)}`;
+    run(cwd, "tools/pipeline/report.mjs", ["candidate", candidate], env);
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    assert.match(
+      fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8"),
+      /QA pending; certification pending/,
+    );
+    assert.throws(() =>
+      run(cwd, "tools/pipeline/report.mjs", ["candidate", candidate], {
+        GITHUB_EVENT_NAME: "pull_request",
+      }),
+    );
+  }));
+
+test("Bake actions use the checkout containing generated cache overlays", () => {
+  const { jobs } = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+  for (const name of ["container-validate", "publish-images"]) {
+    const job = jobs[name];
+    const index = job.steps.findIndex((step) =>
+      step.uses?.startsWith("docker/bake-action@"),
+    );
+    const bake = job.steps[index];
+    assert.equal(
+      bake.with.source,
+      ".",
+      `${name} must not use the remote Git default`,
+    );
+    assert(bake.with.files.split("\n").includes(".work/cache.json"));
+    assert(
+      job.steps
+        .slice(0, index)
+        .some((step) => step.uses?.startsWith("actions/checkout@")),
+    );
+    assert(
+      job.steps
+        .slice(0, index)
+        .some((step) => step.run?.includes("> .work/cache.json")),
+    );
+  }
+});

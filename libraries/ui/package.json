@@ -24,13 +24,6 @@
     "url": "https://github.com/RPJWeez/delivery-reference-platform.git",
     "directory": "libraries/ui"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "public"
-  },
-  "nx": {
-    "tags": [
-      "type:npm-library"
-    ]
-  }
+  "nx": {},
+  "private": true
 }

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: fieldsignal
+description: Complete FieldSignal application candidate; version assigned by CI.
+type: application
+version: 0.0.0
+dependencies:
+  - name: application
+    alias: application
+    version: 0.2.0
+    repository: file://../application

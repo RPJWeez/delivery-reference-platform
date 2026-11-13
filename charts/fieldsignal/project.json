@@ -1,0 +1,12 @@
+{
+  "name": "application-candidate",
+  "targets": {
+    "candidate-package": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "helm dependency build --skip-refresh charts/fieldsignal && helm package charts/fieldsignal"
+      }
+    }
+  }
+}

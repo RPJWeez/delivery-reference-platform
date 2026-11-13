@@ -1,10 +1,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
-  <parent><groupId>io.fieldsignal</groupId><artifactId>fieldsignal-parent</artifactId><version>0.1.1</version><relativePath>../../pom.xml</relativePath></parent>
-  <version>0.1.1</version>
+  <parent><groupId>io.fieldsignal</groupId><artifactId>fieldsignal-parent</artifactId><version>0.0.0-SNAPSHOT</version><relativePath>../../pom.xml</relativePath></parent>
   <artifactId>incident-service</artifactId>
   <dependencies>
-    <dependency><groupId>io.fieldsignal</groupId><artifactId>event-model</artifactId><version>0.1.1</version></dependency>
+    <dependency><groupId>io.fieldsignal</groupId><artifactId>event-model</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-webmvc</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-flyway</artifactId></dependency>

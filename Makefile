@@ -1,16 +1,18 @@
-.PHONY: verify test-java build dev infra infra-down smoke functional
+.PHONY: verify test-java build dev stop infra infra-down smoke functional
 verify:
-	npm run test:workspace
-	helm lint charts/application -f charts/application/ci/values.yaml
+	docker compose run --build --rm verify
 
 test-java:
-	npx nx run-many -t mvn-verify
+	npx nx run fieldsignal:java-verify
 
 build:
 	npm run build
 
 dev:
-	python3 tools/dev.py
+	docker compose up --build -d
+
+stop:
+	docker compose stop
 
 infra:
 	docker compose -f infra/local/compose.yaml up -d --wait postgres kafka

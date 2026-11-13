@@ -1,30 +1,36 @@
-# Local development
+# Contributor guide
 
-Prerequisites: Java 21, Node 22.12+, Docker, Python 3 and Helm 3. The Maven Wrapper pins Maven; Nx delegates to Maven/npm and does not use Nx Cloud.
+Install Git and a supported Docker Desktop/Compose v2 toolchain. Make is optional.
 
-```sh
-npm ci
-make infra
-make build
-make dev
-```
+| Task                                 | Convenience   | Native equivalent                        |
+| ------------------------------------ | ------------- | ---------------------------------------- |
+| Start local application and fixtures | `make dev`    | `docker compose up --build -d`           |
+| Verify source/tests                  | `make verify` | `docker compose run --build --rm verify` |
+| Stop local processes, retain data    | `make stop`   | `docker compose stop`                    |
 
-Consoles: 127.0.0.1:5173 and :5174. APIs: :8081 and :8082. Local PostgreSQL: :55432. Kafka: :9092 (container listener kafka:19092). Vite routes local API calls; it is not Apigee.
+Station console: http://127.0.0.1:5173; operator console: http://127.0.0.1:5174.
+APIs: ports 8081/8082. PostgreSQL: 55432; Kafka: 9092. Fixtures and credentials
+are local synthetic data. Volumes persist when services stop. Removing volumes is a
+separate deliberate reset; do not use a destructive reset as the normal stop command.
+After source changes, rerun `docker compose up --build -d`. Compose builds source,
+including private libraries; it never needs published application-private packages.
 
-After Java edits, rebuild and restart. Frontends reload; rebuild the shared UI package with `npx nx build @rpjweez/fieldsignal-ui` after UI TypeScript edits. Ctrl-C stops the dev launcher and its children.
+With Java 21, Node 22.22.0 and Helm 3.18.4 installed, IDE/native loops remain available:
+`npm ci`, `./mvnw verify`, `npx nx run fieldsignal:java-verify`,
+`npx nx affected -t build typecheck`, and `npm run test:workspace`.
+The Maven wrapper's pinned ZIP requires unzip; slim containers use the pinned Maven
+builder directly. `make smoke` requires the running local APIs/Kafka; Playwright tests
+also require Chromium (`npx playwright install chromium`). These are business tests,
+not certification of a subsequently built registry candidate.
 
-```sh
-make verify
-make test-java
-npm run typecheck
-npm run test:functional
-make smoke
-python3 tools/simulate.py --count 9
-make infra-down
-```
+Change a private library and its callers together. Java modules inherit the fixed reactor
+version and use `${project.version}`; Maven Enforcer rejects reactor pin drift. npm
+libraries are private and consumers use workspace-compatible `*` declarations. Do not
+publish them, bump release versions or install nested registry copies. External dependency
+updates still belong in native manifests/locks. Declare non-imported API/event coupling
+through Nx implicitDependencies.
 
-Java tests use H2 for transactions/idempotency. The smoke test uses real APIs/Kafka; qualification sets FIELDSIGNAL_TEST_NAMESPACE to replay through Kubernetes instead of Compose. Business-functional tests use the two running browser consoles.
-
-Local credentials and test data are synthetic. APIs bind to loopback unless configured otherwise. Production uses secret references and environment configuration. The local Compose named volumes survive `make infra-down`; initialization SQL only runs for an empty PostgreSQL volume.
-
-Local development may compile source-linked libraries. Published image builds resolve explicit released library versions. The deployment repository tests published candidate artifacts without rebuilding them.
+Add deployables with native Docker/Bake, Helm runtime, ownership and application test
+changes. Do not add workflow service matrices. Change environment settings in the
+companion deployment repository. Release selection is a candidate/configuration pair,
+not a manually assembled set of service images.

@@ -1,14 +1,5 @@
 {
   "tags": ["type:maven-library"],
   "implicitDependencies": ["reading-events"],
-  "targets": {
-    "publish-maven": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": ["^publish-maven"],
-      "options": {
-        "command": "bash tools/publish-maven.sh libraries/event-model"
-      }
-    }
-  }
+  "targets": {}
 }

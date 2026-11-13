@@ -1,12 +1,26 @@
 {
   "tags": ["type:maven-parent"],
   "targets": {
-    "publish-maven": {
+    "java-verify": {
       "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": ["^publish-maven"],
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/pom.xml",
+        "{workspaceRoot}/.mvn/**/*",
+        "{workspaceRoot}/mvnw",
+        "{workspaceRoot}/apps/*/pom.xml",
+        "{workspaceRoot}/apps/*/src/**/*",
+        "{workspaceRoot}/libraries/*/pom.xml",
+        "{workspaceRoot}/libraries/*/src/**/*",
+        "{workspaceRoot}/tools/pipeline/config.json",
+        "{workspaceRoot}/nx.json"
+      ],
+      "outputs": [
+        "{workspaceRoot}/apps/*/target",
+        "{workspaceRoot}/libraries/*/target"
+      ],
       "options": {
-        "command": "bash tools/publish-maven.sh ."
+        "command": "./mvnw -B -ntp verify"
       }
     }
   }

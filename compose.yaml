@@ -1,0 +1,46 @@
+name: fieldsignal
+include:
+  - infra/local/compose.yaml
+services:
+  ingestion-service:
+    image: fieldsignal/ingestion-service:local
+    build: { context: ., dockerfile: apps/ingestion-service/Dockerfile }
+    ports: ["127.0.0.1:8081:8080"]
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/ingestion
+      DATABASE_USER: ingestion_user
+      DATABASE_PASSWORD: fieldsignal-local-only
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka-init: { condition: service_completed_successfully }
+  incident-service:
+    image: fieldsignal/incident-service:local
+    build: { context: ., dockerfile: apps/incident-service/Dockerfile }
+    ports: ["127.0.0.1:8082:8080"]
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/incident
+      DATABASE_USER: incident_user
+      DATABASE_PASSWORD: fieldsignal-local-only
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka-init: { condition: service_completed_successfully }
+  station-console:
+    image: fieldsignal/station-console:local
+    build: { context: ., dockerfile: apps/station-console/Dockerfile }
+    ports: ["127.0.0.1:5173:8080"]
+    environment: { API_UPSTREAM: "ingestion-service:8080" }
+    depends_on: [ingestion-service]
+  operator-console:
+    image: fieldsignal/operator-console:local
+    build: { context: ., dockerfile: apps/operator-console/Dockerfile }
+    ports: ["127.0.0.1:5174:8080"]
+    environment: { API_UPSTREAM: "incident-service:8080" }
+    depends_on: [incident-service]
+  verify:
+    profiles: [tools]
+    build: { context: ., dockerfile: tools/verification/Dockerfile }
+    volumes: [nx-cache:/workspace/.nx/cache]
+volumes:
+  nx-cache:

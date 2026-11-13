@@ -1,41 +1,44 @@
 # Architecture
 
-FieldSignal is one business application maintained by several teams. Sensing owns ingestion and the station console; Response owns incident processing and the operator console. The **application composition** is the release and qualification boundary. Components retain independent build/publication identities.
+FieldSignal is one releasable application per source repository. Java application-private
+modules compile in Maven's reactor; npm private workspaces link local source builds.
+There is no independent internal-package publication or adoption-version workflow.
+Previously published artifacts remain retained and untouched. The maintainer confirmed
+that these packages have no external consumers during the golden-path migration.
 
-## Sources of truth
+Maven/npm own compilation and dependencies. Nx remains responsible for affected
+selection, orchestration and task caching. Maven dependency inference remains pinned;
+execution uses one native reactor target. The experimental plugin's 113-task lifecycle
+execution achieved only 70 cache hits on an unchanged repeat and produced recursive
+terminal records. The native reactor task restores its declared outputs in one cache
+entry. See the checkpoint for measured verification and remaining acceptance gates.
 
-| Concern                                       | Authority                                                      |
-| --------------------------------------------- | -------------------------------------------------------------- |
-| Java dependencies and package versions        | POM files                                                      |
-| JavaScript dependencies and package versions  | package.json and package-lock.json                             |
-| Affected tasks and declared contract coupling | Standard Nx graph and project configuration                    |
-| Review ownership                              | CODEOWNERS                                                     |
-| Complete release selection                    | Standard Helm candidate chart and values in fieldsignal-deploy |
-| Active application candidate                  | OCI digest in the environment's Argo Application               |
-| Qualification                                 | Signed attestation bound to that digest                        |
+Source CI validates PRs and prepares complete immutable candidates on protected main.
+Dockerfiles consume source and run native tests/builds; host target/dist/node_modules
+are excluded. Bake's application group owns build outputs. The app-owned Helm chart
+owns runtime roles. A bounded adapter binds native output digests to Helm values and
+checks the rendered image closure. A candidate includes templates, pinned vendored
+chart dependencies, configuration schema and build identities; image bytes remain in
+separate registry objects. CI assigns chart versions from run/attempt, not contributor
+release bookkeeping. Source SHA alone is not build identity.
 
-Nx's Maven plugin is experimental, pinned, and covered by selection/build tests. It delegates dependency analysis to Maven and execution to Maven/npm. No Nx Cloud subscription is required. Contracts that are not imported code still need explicit relationships; native Nx implicitDependencies record them without a second graph format.
+Separate deployment-repository QA uses the exact candidate digest in disposable kind
+with application-owned fixtures and tests from the verified source revision. Evidence
+records artifact/config/test/fixture/platform/attempt identities and observed runtime
+images. Protected certification verifies trusted build/QA evidence and current security
+policy, then signs eligibility against the same registry digest. Production selects an
+eligible candidate plus an existing reviewed configuration commit. The outer GitOps
+pointer may follow protected main; runtime configuration cannot move independently.
+All alternate Helm override routes are rejected.
 
-## Build and publication
+These are prepared repository contracts. The migration has demonstrated local source
+builds, cache restoration/invalidation and Compose business tests. Signed source-main
+publication, cross-repository QA/certification and production health orchestration have
+not been demonstrated. Deployment examples remain inactive. Certification remains
+fail-closed until its protected capability is configured; no protections were changed.
 
-PRs run affected component tests/builds, dependency-selection regression tests and Helm schema/render checks. Protected main publishes affected artifacts. A publication failure keeps the workflow unsuccessful, so the next comparison does not silently omit those changes. Versioned Maven/npm/chart coordinates cannot be overwritten with different bytes; identical retries reuse them. Image versions include commit, run and attempt; deployment uses digests.
-
-Release builds resolve published library versions, never mutable snapshots. A new library version does not silently change a consumer pin. Maven/npm changes must explicitly update the dependent version when adopting a new library. Local source-linked development is separate from this publication path.
-
-## Qualification and promotion
-
-The deployment repository packages a standard Helm wrapper chart containing image digests and its vendored shared-chart dependency. Qualification verifies evidence, deploys that exact OCI candidate through one Argo Application in disposable kind, and runs browser/API/replay tests. Its signed result records the candidate digest, deployment-config revision, test-suite digest, runner architecture and workflow URL.
-
-Promotion changes the environment's candidate OCI digest. GitOps uses Argo CD native OCI sources, so a mutable chart tag cannot change the selected content. Environment values may vary endpoints, secret references, resources and replica counts; they cannot override images or business rules. These differences receive static validation and review, not a claim that every environment is identical.
-
-A prepared PR is not active desired state. Merging its environment change requests deployment. Concurrent source publication cannot alter its digest selections. Conflicting production promotions require refreshed review and validation against the prospective merged configuration. A frozen candidate is qualified as a whole; composing two independently tested candidates produces a new candidate.
-
-## Rollout and recovery
-
-One Application is a coherent desired-state/operational boundary, not a distributed transaction. Rolling pods, cached browser clients and Kafka replay require compatibility. Use expand/migrate/contract database changes, versioned event semantics, deprecation windows and feature activation after prerequisites are ready. Git rollback restores a previous compatible candidate and does not undo emitted events or destructive data changes.
-
-Argo uses Helm to render resources; it does not create a Helm-managed release. Platform dependencies and Argo itself are outside FieldSignal's resource ownership. A restricted AppProject allows application resources only in the intended namespaces. Cluster-administrator intervention remains outside the normal promotion path.
-
-## Free-tier boundaries
-
-Use public GHCR images/charts and public GitHub Packages. Standard GitHub-hosted runners are used; no larger runners or Nx Cloud. Passing CI logs are ephemeral, failure reports retain 14 days, and signed release evidence lives with retained artifacts. Retain every qualified/deployed/rollback candidate and its dependency closure. Never blindly purge untagged OCI manifests or evidence. Persistent cloud Kubernetes and a real Apigee subscription are deliberately outside this baseline.
+Coherent desired state does not imply atomic rollout. Preserve API/event compatibility,
+expand/migrate/contract database changes and client deprecation windows. Rollback uses
+a retained compatible candidate/configuration pair and does not undo data or external
+events. Retain old images, packages, evidence and supported rollback closures; no registry
+cleanup or copying is part of this migration. See [operator recovery](operator-runbook.md).

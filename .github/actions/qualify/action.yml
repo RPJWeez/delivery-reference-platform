@@ -26,6 +26,15 @@ inputs:
   test-root:
     required: true
     description: Absolute path to the checked-out application test source
+  expected-images:
+    required: true
+    description: Absolute path to verified candidate image references, one per line
+  release-name:
+    required: true
+    description: Helm release name used by application resources
+  fixture-path:
+    required: true
+    description: Application fixture declaration relative to test-root
   test-revision:
     required: true
     description: Exact source commit containing the tests and dependency provisioning script
@@ -84,6 +93,16 @@ runs:
           kubectl apply -f -
         kubectl wait -n argocd --for=jsonpath='{.status.sync.status}'=Synced application/${{ inputs.application }} --timeout=300s
         kubectl wait -n argocd --for=jsonpath='{.status.health.status}'=Healthy application/${{ inputs.application }} --timeout=300s
+    - name: Verify observed candidate and configuration
+      shell: bash
+      env:
+        REFERENCE: ${{ inputs.reference }}
+        DEPLOYMENT_REVISION: ${{ inputs.deployment-revision }}
+        APPLICATION: ${{ inputs.application }}
+        QUALIFICATION_NAMESPACE: ${{ inputs.namespace }}
+        RELEASE_NAME: ${{ inputs.release-name }}
+        EXPECTED_IMAGES: ${{ inputs.expected-images }}
+      run: node "$GITHUB_ACTION_PATH/../../../tools/pipeline/observe-qa.mjs"
     - name: Application qualification tests
       shell: bash
       env:
@@ -94,6 +113,16 @@ runs:
         set -euo pipefail
         cd "$PLATFORM_ROOT"
         bash -euo pipefail -c "$TEST_COMMAND"
+    - name: Recheck observed candidate after tests
+      shell: bash
+      env:
+        REFERENCE: ${{ inputs.reference }}
+        DEPLOYMENT_REVISION: ${{ inputs.deployment-revision }}
+        APPLICATION: ${{ inputs.application }}
+        QUALIFICATION_NAMESPACE: ${{ inputs.namespace }}
+        RELEASE_NAME: ${{ inputs.release-name }}
+        EXPECTED_IMAGES: ${{ inputs.expected-images }}
+      run: node "$GITHUB_ACTION_PATH/../../../tools/pipeline/observe-qa.mjs"
     - name: Record exact qualification inputs
       shell: bash
       env:
@@ -103,16 +132,26 @@ runs:
         TEST_REVISION: ${{ inputs.test-revision }}
         TEST_COMMAND: ${{ inputs.test-command }}
         DEPENDENCIES: ${{ inputs.dependencies }}
+        FIXTURE_PATH: ${{ inputs.fixture-path }}
       run: |
         mkdir -p .work
         python3 - <<'PY'
-        import json, os, platform
+        import json, os, platform, hashlib, datetime
         from pathlib import Path
         root = Path(os.environ['PLATFORM_ROOT'])
         import subprocess
         revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
         assert revision == os.environ['TEST_REVISION'], 'test checkout must match declared revision'
-        result = {'result': 'passed', 'candidate': os.environ['REFERENCE'],
+        digest = lambda data: 'sha256:'+hashlib.sha256(data).hexdigest()
+        observed = json.loads(Path('.work/observed.json').read_text())
+        platform_info = subprocess.check_output(['kubectl', 'version', '-o', 'json'])
+        config = Path('environments/qualification/values.yaml').read_bytes()
+        result = {'completedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  'attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'platform': digest(platform_info),
+                  'configurationDigest': digest(config),
+                  'fixturesDigest': digest((root / os.environ['FIXTURE_PATH']).read_bytes()),
+                  'observedCandidate': observed['candidate'], 'observedDigest': observed['observedDigest'],
+                  'result': 'passed' , 'candidate': os.environ['REFERENCE'],
                   'deploymentRevision': os.environ['DEPLOYMENT_REVISION'],
                   'testRevision': revision, 'testCommand': os.environ['TEST_COMMAND'],
                   'dependencies': os.environ['DEPENDENCIES'], 'architecture': platform.machine(),
@@ -135,3 +174,9 @@ runs:
         path: ${{ inputs.test-root }}/test-results
         retention-days: 14
         if-no-files-found: ignore
+    - name: Delete disposable QA cluster
+      if: always()
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.namespace }}
+      run: kind delete cluster --name "$CLUSTER"

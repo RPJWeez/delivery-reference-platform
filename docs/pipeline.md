@@ -1,74 +1,79 @@
-# Pipeline operation and template contract
+# Pipeline operation
 
-The workflow validates PR merge commits and publishes on pushes to main. Standalone feature branch pushes do not run. Publication never deploys an application.
+PRs validate merge commits. Protected main publishes complete immutable candidates;
+source CI never deploys, QA-tests or certifies an application.
 
-## Reading a run
+## Reports and failure states
 
-Open **Run report** in the Actions run summary. The headline says whether validation passed. A PR report immediately states that publishing is disabled; it has no publication table. The checks table lists Java, frontend, regression tests, and Helm lint individually, with direct job links and failed test names when available. A failed aggregate validation gate is explained as the consequence of the failed check.
+The Run report distinguishes checks, affected validation and actual publication records.
+PR reports explicitly disable publication and reject stray publication records. Published
+fragments are reported even when subsequent evidence fails. Missing completion records
+remain unconfirmed/not attempted; selection alone never establishes publication.
+Candidate handoff is recorded only after image evidence, chart publication and candidate
+attestations succeed. A published chart with incomplete evidence is not a complete
+handoff. QA, certification, promotion and observed health are separate states.
 
-**Affected projects** lists the planned checks and explains whether project files, a dependency, or shared pipeline inputs triggered selection. It describes selected work, not published artifacts. Full commit IDs and changed files are collapsed under **Comparison and changed files**. Download `run-report` for both the Markdown and machine-readable JSON. Intermediate `results-*` artifacts preserve the plan and individual job results; `validation-*` artifacts retain validation logs and available Java test reports.
+Records belong to repository/run/attempt/source/event. Stale/malformed records are
+ignored with diagnostics. `report.mjs summary --github-summary` is the only summary
+write route; the explicit flag remains mandatory. Tests isolate inherited GitHub/Nx
+context and use temporary output/summary files. Keep the summary-leak regression tests.
+Run artifacts include the machine report, Markdown, native build metadata, handoff and
+individual results. Failure diagnostics have bounded retention; durable evidence remains
+with registry signatures/attestations and retained Release assets.
 
-Main runs additionally show **Publication** with only observed successful publication/reuse records, destinations, versions, and evidence links. Selected components without records appear separately: a blocked publisher is **not attempted**, while a publisher that ran without a completion record is **unconfirmed**. Digests are collapsed into a separate table. Publication results are recorded immediately after registry operations, before evidence generation, so an evidence failure does not hide a successfully published artifact. A wholly cancelled workflow may not finish its final report.
+## Build, selection and caches
 
-Every result is bound to its repository, workflow run, attempt, commit, and event. Stale or malformed files are ignored with a diagnostic. PR reports reject publication records even if one is accidentally present. The renderer writes GitHub’s summary only with the workflow’s explicit `--github-summary` flag. Test subprocesses use temporary summary/output files and remove inherited GitHub/Nx execution context, preventing fictional fixture data from appearing in real summaries.
+Nx retains affected Java/frontend/contract selection. Selected Java work invokes one
+cached native Maven reactor task; npm build/typecheck targets remain affected. The full
+native reference and container build proofs exercise the same private checkout sources.
+Dockerfiles exclude host outputs and use pinned Maven/Node/runtime bases. Bake owns
+the complete publishable application group; Helm owns runtime workloads. The bounded
+candidate adapter binds native digests and verifies rendered image completeness.
 
-## Validation stages
+Caches are explicit and independent:
 
-1. **Plan affected work** checks out full history, selects affected projects with Nx, and records the plan. PRs compare the target commit to the synthetic merge commit. Main compares to the last successful complete `ci.yml` push workflow; bootstrap compares to an empty tree. Failed publication stays in the comparison range for the next main run.
-2. **Java — compile, test, package** runs affected Maven `verify` targets. This executes the Maven lifecycle through verify, including configured compilation, tests, and packaging. FieldSignal's unit tests use H2; this is not real Kafka or browser qualification.
-3. **Frontend — build and typecheck** runs applicable affected Nx build/typecheck targets and prerequisite builds.
-4. **Pipeline and Helm regression tests** exercises selection, reporting, release asset repair, publishing adapters, and chart rendering. It also lints every discovered chart. This suite deliberately runs on every workflow.
-5. **Validation complete** is the aggregate gate required by all publishers. When updating branch protection, select this check (the old `ci` display name has changed).
+- setup-node caches public npm downloads; setup-java caches Maven downloads.
+- Actions cache persists `.nx/cache` with distinct validation matrix scopes so
+  producers cannot race to save one incomplete shared cache key. Native task input hashes include source, native
+  manifests/locks, toolchain config and shared Nx/workflow inputs. Java and frontend
+  outputs are declared and tested for restoration after deletion.
+- Protected-main Bake imports/exports Actions BuildKit caches with one scope per native
+  target. PR builds only import trusted base-branch caches and never export compilation
+  caches to main. GitHub cache ref scoping also isolates PR Nx/download cache writes.
 
-Maven/npm publish before dependent images. Maven publication is serialized in graph order. Chart publication runs independently after validation. Images rebuild against registry dependencies, publish both configured architectures, and receive signatures and attestations. Explicit library/chart versions must be bumped when content changes. Identical immutable versions can be reused. Image tags include commit, run ID, and attempt.
+Cache eviction is a performance event: empty caches fall back to native downloads and
+builds. Whole source context copying is conservative; unrelated application inputs can
+invalidate layers. There is no custom graph, image carry-forward or reuse engine. Initial
+local measurements and invalidation tests appear in the checkpoint. Local task/layer
+reuse is demonstrated; GitHub cross-run persistence must still be observed after review.
+Do not equate npm downloads with compiled-output or Docker caches.
 
-## Finding evidence
+## Publication and handoff
 
-| Kind  | Raw SBOM                                                               | Signed evidence                                                   |
-| ----- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Maven | Release linked in report; component/run/attempt `.cdx.json`            | GitHub provenance and SBOM attestations                           |
-| npm   | Release linked in report; package/run/attempt `.spdx.json`             | GitHub provenance and SBOM attestations                           |
-| Image | Per-component run Release linked in report; `.spdx.json`               | GitHub/registry attestations, BuildKit evidence, Cosign signature |
-| Chart | Chart version Release linked in report; chart/run/attempt `.spdx.json` | GitHub archive attestations and Cosign signature on OCI digest    |
+Main builds every native application image for linux/amd64 with BuildKit provenance/SBOM.
+Image signing/provenance/SBOM must succeed for every output. Candidate assembly verifies
+trusted image source/ref/workflow and exact source digest, generates image values, vendors
+the pinned chart dependency, records builder/material/tool/run/attempt inputs and packages
+Helm with a CI-assigned version. No user image matrix or manual candidate directory exists.
+`candidate-handoff` contains an exact OCI reference and build identities, never a latest tag.
 
-SBOM filenames include run/attempt because scanners include generation metadata. Retries can add missing evidence without replacing immutable files. The release retention adapter compares existing asset bytes and rejects conflicts. An existing release no longer prevents missing assets from being uploaded. Old missing evidence is repaired when the component is selected again; this change does not backfill all historical releases.
+App declarations live in Docker/Bake, Maven/npm, Nx and Helm. The current reference chart
+is `charts/fieldsignal`; this app-specific path is an adoption setting, not a second component
+catalog. Candidate/image registry paths derive from the source repository. The chart name,
+QA hooks and native declarations remain application-owned. Second-app build/runtime adapter
+proofs are in `tests/fixtures/tide-app` and `tide-web`; protected governance portability remains
+an acceptance gate, not a claim established by the older graph-only fixture.
 
-A chart SBOM inventories the packaged chart, not its selected application images. Each image has its own SBOM. BuildKit retains per-platform inventories; the additional scanner JSON is a supplemental inventory for the scanner-selected platform. Actions artifacts are convenient, retention-limited diagnostics/results; Releases and OCI evidence provide the durable copies. Preserve evidence and artifacts referenced by qualified/deployed candidates.
+## Deployment integration
 
-For registry artifacts, verify provenance with `gh attestation verify oci://<image>@sha256:<digest> --repo <owner>/<repo>`. For downloaded files use `gh attestation verify <file> --repo <owner>/<repo>`. Inspect the linked release's assets for the raw SBOM; provenance and SBOM predicates are separate attestations.
+The companion consumes trusted source-CI signatures and exact build/image evidence, pulls
+the same candidate, validates its own packaged environment schema, and checks out tests at
+the verified source revision. QA runs disposable kind with observed image/config checks
+before/after browser/API/Kafka tests and always deletes its cluster. Certification has a
+different trusted workflow identity, current policy/expiry/revocation checks and fresh Grype
+high/critical scanning. Source CI cannot supply an accepted certification signature.
 
-## Using the repository as a template
-
-Reusable mechanics live in `.github/workflows`, `.github/actions`, and `tools/pipeline`. Application definitions remain in native Maven/npm/Helm manifests, Nx targets/implicit dependencies, infrastructure, and business tests. No second service catalog is required.
-
-- Edit `tools/pipeline/config.json` for Java/Node versions, npm registry, image architectures, and the chart registry path. Setup derives authentication scopes only from publishable workspace manifests, leaving third-party scopes alone.
-- Maven uses `MAVEN_REPOSITORY_URL`; Actions defaults it to `https://maven.pkg.github.com/$GITHUB_REPOSITORY`. Set this variable locally when resolving published dependencies. This URL is shared by publishing and resolution, eliminating the previous mismatched hardcoded repositories.
-- Image repositories derive from the current repository and project directory basename. Component directory basenames must be unique. Charts derive from their Nx project roots and publish under the current owner. npm names/scopes remain standard package manifest settings.
-- Add standard Nx `container`, `publish-maven`, or `chart-package` targets as appropriate. Tag npm libraries `type:npm-library`. Maven/npm dependency inference and explicit contract dependencies determine impact. Keep the workflow filename `ci.yml`, or update its history lookup together with a rename.
-- Pipeline configuration, publishing scripts, workflow/actions, and shared tool inputs participate in Nx affected selection. Publication targets declare inputs explicitly, including projects that have no build target.
-- The current adapters support Maven JAR/POM, npm, OCI images, and Helm on GitHub infrastructure. Adding another language or registry requires an adapter/target; arbitrary ecosystems are not automatically supported.
-- `tests/fixtures/portable-app/workspace.json` defines an unrelated Harbor application with different paths and component names. Regression tests instantiate it in an isolated directory and run real Nx selection using the repository target defaults. Registry repair uses a local fake GitHub CLI; these tests do not publish packages.
-
-The Makefile is a local command interface. `tools/smoke.py`, browser tests, Kafka topics, and application assertions remain application-owned. Copying the template means replacing those application examples and their native manifests, not editing the publishing algorithms.
-
-## Qualification caller migration
-
-The reusable qualification action now takes application-owned hooks instead of containing FieldSignal's ports and service names. Deployment-repository callers must supply these inputs when adopting this revision:
-
-```yaml
-with:
-  reference: <digest-addressed candidate>
-  deployment-revision: <exact deployment commit>
-  namespace: fieldsignal-qualification
-  application: fieldsignal-qualification
-  dependencies: tools/qualify-dependencies.sh
-  test-command: bash tools/qualify-tests.sh
-  test-root: ${{ github.workspace }}/source
-  test-revision: <exact source checkout commit>
-```
-
-Check out the source containing the hooks at `test-revision` into `test-root` (a clean checkout). This is explicit because remote composite action downloads do not include Git history. The action verifies the checkout before running provisioning or tests. Dependency hooks run from that source root with `QUALIFICATION_NAMESPACE`; tests receive that variable plus `PLATFORM_ROOT`. FieldSignal hooks retain its real API/Kafka/browser scenarios. Qualification records the exact source revision, hooks, command, candidate digest, and deployment revision. Callers retain the bootstrap project and qualification Argo Application files in the deployment checkout, following the existing two-source candidate/configuration convention.
-
-The separate deployment repository is not modified by source CI. Update its caller alongside adopting this action revision. A live qualification run is still required to validate the external integration.
-
-The Maven parent/libraries and their dependency pins move to `0.1.1` in this change because repository URL metadata changes the published POM bytes; reusing `0.1.0` would correctly fail the immutability guard.
+Production proposals pin a reviewed existing config commit, reject alternate Helm override
+routes, verify current certification, and render that exact pairing. No active environment
+Applications or shared production observer were provisioned by this migration. See the
+[operator runbook](operator-runbook.md) and checkpoint before enabling capabilities.

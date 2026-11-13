@@ -9,7 +9,7 @@
   </parent>
   <groupId>io.fieldsignal</groupId>
   <artifactId>fieldsignal-parent</artifactId>
-  <version>0.1.1</version>
+  <version>0.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <properties>
     <java.version>21</java.version>
@@ -17,9 +17,14 @@
   </properties>
   <build><pluginManagement><plugins>
     <plugin><groupId>dev.nx.maven</groupId><artifactId>nx-maven-plugin</artifactId><version>0.0.19</version></plugin>
-  </plugins></pluginManagement></build>
-  <distributionManagement><repository><id>github</id><url>${env.MAVEN_REPOSITORY_URL}</url></repository></distributionManagement>
-  <profiles><profile><id>published-dependencies</id><repositories><repository><id>github</id><url>${env.MAVEN_REPOSITORY_URL}</url><snapshots><enabled>false</enabled></snapshots></repository></repositories></profile></profiles>
+  </plugins></pluginManagement><plugins>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.6.1</version>
+      <executions><execution><id>private-reactor-convergence</id><goals><goal>enforce</goal></goals>
+        <configuration><rules><reactorModuleConvergence/></rules></configuration>
+      </execution></executions>
+    </plugin>
+  </plugins></build>
   <modules>
     <module>libraries/measurements</module>
     <module>libraries/event-model</module>
