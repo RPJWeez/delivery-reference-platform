@@ -222,15 +222,29 @@ jobs:
           provenance: mode=max
           sbom: true
           set: "*.platform=linux/amd64"
-      - name: Record native build outputs immediately
+      - name: Persist native build metadata
+        id: metadata
         if: always()
-        env:
-          METADATA: ${{ steps.build.outputs.metadata }}
+        shell: node {0}
         run: |
-          printf '%s' "$METADATA" > .work/metadata.json
+          const fs = require('node:fs');
+          // JSON literal in the runner's script file, never an environment/argv payload.
+          const metadata = ${{ toJSON(steps.build.outputs.metadata) }};
+          if (typeof metadata !== 'string' || !metadata.trim()) {
+            throw new Error('Build metadata unavailable; image publication remains unconfirmed.');
+          }
+          const parsed = JSON.parse(metadata);
+          if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+            throw new Error('Expected native Bake metadata object.');
+          }
+          fs.mkdirSync('.work', {recursive: true});
+          fs.writeFileSync('.work/metadata.json', metadata);
+      - name: Record native build outputs immediately
+        if: always() && steps.metadata.outcome == 'success'
+        run: |
           node --input-type=module <<'JS'
           import fs from 'node:fs'; import {execFileSync} from 'node:child_process';
-          const meta=JSON.parse(fs.readFileSync('.work/metadata.json','utf8') || '{}');
+          const meta=JSON.parse(fs.readFileSync('.work/metadata.json','utf8'));
           const bake=JSON.parse(fs.readFileSync('.work/bake.json','utf8'));
           for (const [name, result] of Object.entries(meta)) {
             if (!/^sha256:[a-f0-9]{64}$/.test(result['containerimage.digest'])) continue;
