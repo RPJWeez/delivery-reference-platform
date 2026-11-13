@@ -69,9 +69,18 @@ runs:
         echo "package=$archive" >> "$GITHUB_OUTPUT"
         echo "digest=$digest" >> "$GITHUB_OUTPUT"
         echo "reference=$REGISTRY/$name@$digest" >> "$GITHUB_OUTPUT"
+    - name: Extract published chart for SBOM inventory
+      id: inventory
+      shell: bash
+      env:
+        ARCHIVE: ${{ steps.package.outputs.package }}
+      run: |
+        set -euo pipefail
+        mkdir -p .work/charts/sbom
+        tar -xzf "$ARCHIVE" -C .work/charts/sbom
     - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
       with:
-        path: ${{ steps.package.outputs.package }}
+        path: .work/charts/sbom
         format: spdx-json
         output-file: .work/charts/chart.spdx.json
         upload-artifact: false

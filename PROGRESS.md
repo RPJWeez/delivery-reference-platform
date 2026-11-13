@@ -14,8 +14,8 @@ Branch: refactor/application-release-gitops. Main is protected by PRs and the ci
 
 ## In progress
 
-- Source migration PR and required remote CI.
-- Real protected-main publication; initial package visibility setup.
+- Source migration PR #6 merged after passing required CI.
+- First main publication run 43438584158: CI and npm publication/evidence passed; Maven failed because its checkout lacked the Nx base commit; chart upload succeeded but SBOM inventory incorrectly used an archive as a directory. Images were skipped. Fix branch adds full publication history and inventories the extracted, selected chart archive. Remote retry remains pending merge.
 - Deployment repository candidate/qualification/promotion configuration and tests.
 - End-to-end candidate qualification and promotion/recovery evidence.
 
