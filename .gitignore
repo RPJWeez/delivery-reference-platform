@@ -7,3 +7,7 @@ __pycache__/
 .env
 *.kubeconfig
 .work/
+.nx/
+playwright-report/
+test-results/
+*.tgz

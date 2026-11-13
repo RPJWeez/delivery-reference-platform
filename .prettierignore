@@ -1,0 +1,12 @@
+node_modules
+.nx
+.work
+**/target
+**/dist
+charts/**/templates/**
+mvnw
+mvnw.cmd
+package-lock.json
+docs/images
+test-results
+playwright-report

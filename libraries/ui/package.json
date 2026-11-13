@@ -1,5 +1,5 @@
 {
-  "name": "@fieldsignal/ui",
+  "name": "@rpjweez/fieldsignal-ui",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -18,5 +18,19 @@
   },
   "peerDependencies": {
     "react": "^19.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RPJWeez/delivery-reference-platform.git",
+    "directory": "libraries/ui"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "nx": {
+    "tags": [
+      "type:npm-library"
+    ]
   }
 }

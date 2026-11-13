@@ -1,7 +1,7 @@
 apiVersion: v2
 name: application
-description: Reusable workload chart for a single team-owned release unit
+description: Shared workload templates, assembled into one qualified application release
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "0.1.0"
 kubeVersion: '>=1.29.0-0'

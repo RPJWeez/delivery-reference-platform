@@ -2,10 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "releaseVersion",
-    "workloads"
-  ],
+  "required": ["releaseVersion", "workloads"],
   "properties": {
     "releaseVersion": {
       "type": "string",
@@ -18,11 +15,7 @@
         "^[a-z][a-z0-9-]{0,39}$": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "image",
-            "port",
-            "replicas"
-          ],
+          "required": ["image", "port", "replicas"],
           "properties": {
             "image": {
               "type": "string",
@@ -45,6 +38,37 @@
             "readinessPath": {
               "type": "string",
               "pattern": "^/[a-zA-Z0-9/_-]+$"
+            },
+            "env": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "propertyNames": {
+                "pattern": "^[A-Z][A-Z0-9_]*$"
+              }
+            },
+            "envFromSecret": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "limits": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "requests": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         }

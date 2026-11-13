@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "neverConnectToCloud": true,
+  "defaultBase": "main",
+  "plugins": [
+    {
+      "plugin": "@nx/maven",
+      "options": {
+        "targetNamePrefix": "mvn-"
+      }
+    }
+  ],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "sharedGlobals": [
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/package-lock.json",
+      "{workspaceRoot}/tsconfig.json",
+      "{workspaceRoot}/.mvn/**/*",
+      "{workspaceRoot}/.github/workflows/**/*",
+      "{workspaceRoot}/.dockerignore"
+    ]
+  },
+  "targetDefaults": {
+    "build": {
+      "dependsOn": ["^build"],
+      "cache": true,
+      "inputs": ["default", "^default"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "cache": true,
+      "inputs": ["default", "^default"]
+    },
+    "mvn-package": {
+      "cache": true
+    }
+  }
+}

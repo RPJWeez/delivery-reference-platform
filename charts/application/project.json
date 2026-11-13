@@ -1,0 +1,13 @@
+{
+  "name": "application-chart",
+  "tags": ["type:helm-chart"],
+  "targets": {
+    "lint": {
+      "command": "helm lint charts/application -f charts/application/ci/values.yaml"
+    },
+    "chart-package": {
+      "command": "helm package charts/application --destination .work/charts",
+      "outputs": ["{workspaceRoot}/.work/charts"]
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "tags": ["type:maven-library"],
+  "targets": {
+    "publish-maven": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": ["^publish-maven"],
+      "options": {
+        "command": "bash tools/publish-maven.sh libraries/measurements"
+      }
+    }
+  }
+}

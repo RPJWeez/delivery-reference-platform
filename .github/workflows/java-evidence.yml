@@ -1,0 +1,55 @@
+name: Maven artifact evidence
+on:
+  workflow_call:
+    inputs:
+      project: { type: string, required: true }
+permissions:
+  contents: write
+  packages: read
+  id-token: write
+  attestations: write
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/setup
+      - name: Resolve published artifact and its dependency inventory
+        id: artifact
+        env:
+          PROJECT: ${{ inputs.project }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=$(npx nx show project "$PROJECT" --json | jq -r .root)
+          artifact="${PROJECT##*:}"
+          version=$(python3 - "$root/pom.xml" <<'PY'
+          import sys, xml.etree.ElementTree as E
+          print(E.parse(sys.argv[1]).getroot().findtext('{http://maven.apache.org/POM/4.0.0}version'))
+          PY
+          )
+          extension=jar
+          if [[ "$root" == . ]]; then extension=pom; fi
+          mkdir -p .work/subjects
+          ./mvnw -N -B -ntp -Ppublished-dependencies dependency:copy -Dartifact="$PROJECT:$version:$extension" -DoutputDirectory="$PWD/.work/subjects" -Dtransitive=false
+          ./mvnw -B -ntp -Ppublished-dependencies -pl "$PROJECT" org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom
+          echo "sbom=$root/target/bom.json" >> "$GITHUB_OUTPUT"
+          echo "tag=$artifact-v$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with: { subject-path: ".work/subjects/*" }
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
+        with:
+          {
+            subject-path: ".work/subjects/*",
+            sbom-path: "${{ steps.artifact.outputs.sbom }}",
+          }
+      - name: Retain artifact and SBOM outside ephemeral CI storage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.artifact.outputs.tag }}
+          SBOM: ${{ steps.artifact.outputs.sbom }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" .work/subjects/* "$SBOM" --target "$GITHUB_SHA" --title "$TAG" --notes 'Immutable Maven artifact. Verify its signed provenance and SBOM using gh attestation verify.'
+          fi
