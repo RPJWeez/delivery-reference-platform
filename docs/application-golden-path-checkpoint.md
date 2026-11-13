@@ -67,3 +67,9 @@ as passed. No newly built candidate has been called QA-tested, certified, promot
 Final static verification: both repositories passed actionlint 1.7.12, YAML parsing,
 shell syntax and git diff whitespace checks. Added native provenance completeness
 focused coverage after the full native run; all focused tests and 45 companion tests passed.
+
+Review handoff: source implementation `8d1e429` plus matrix cache isolation `2a194dc`
+were pushed to origin/codex/application-golden-path. Companion implementation `111a4bd`
+was pushed under the same branch name and pins source machinery at `2a194dc`. GitHub
+connector draft-PR creation returned HTTP 403 for both repositories; no PR-triggered CI
+was started. Open review PRs from the pushed branches after resolving that access boundary.
