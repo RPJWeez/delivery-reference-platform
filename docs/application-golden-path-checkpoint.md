@@ -80,3 +80,11 @@ context, where the runner-generated .work/cache.json does not exist. Both PR and
 Bake actions now explicitly use source: . (the checked-out workspace). Pipeline regression
 tests and actionlint passed locally; the push requests a fresh PR run. No permissions,
 publication gates or summary-write behavior changed.
+
+Human summary follow-up (codex/human-pipeline-summary): report now explains PR Docker
+builds, shows actual publication/failed/skipped stages, groups current-attempt download/
+registry/Release-asset links, and collapses technical selection. Inspected merged-main
+run 43525491538: validation passed but all publishers skipped because the PR-only container
+ancestor was skipped. Publisher jobs now explicitly handle skipped ancestors with always()
+while requiring successful validation/prerequisites and a main push. No merge/deployment
+performed. Summary-isolation/explicit-write and partial-publication coverage preserved.

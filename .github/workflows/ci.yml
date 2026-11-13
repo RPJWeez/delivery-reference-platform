@@ -111,6 +111,7 @@ jobs:
         if: always()
         env:
           CHECK_NAME: ${{ matrix.name }}
+          VALIDATION_ARTIFACT: validation-${{ strategy.job-index }}
           CHECK_RESULT: ${{ job.status }}
           LINT_RESULT: ${{ steps.lint.outcome }}
         run: node tools/pipeline/report.mjs validation "$CHECK_NAME" "$CHECK_RESULT" "$LINT_RESULT"
@@ -180,7 +181,9 @@ jobs:
   publish-images:
     name: Publish complete image set
     needs: [plan, ci]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.ci.result == 'success'
     runs-on: ubuntu-24.04
     permissions: { contents: read, packages: write }
     outputs:
@@ -253,6 +256,9 @@ jobs:
 
   image-evidence:
     needs: [ci, publish-images]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.ci.result == 'success' && needs.publish-images.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       { contents: write, packages: write, id-token: write, attestations: write }
@@ -315,7 +321,10 @@ jobs:
   publish-chart:
     name: Publish complete candidate; QA pending
     needs: [ci, publish-images, image-evidence]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && needs.ci.result == 'success' && needs.publish-images.result == 'success'
+      && needs.image-evidence.result == 'success'
     runs-on: ubuntu-24.04
     permissions:
       { contents: write, packages: write, id-token: write, attestations: write }
@@ -429,12 +438,25 @@ jobs:
           mkdir -p .work
           set -euo pipefail
           gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100&filter=latest" | jq '{jobs: [.[].jobs[]]}' > .work/jobs.json
+      - name: Read run artifact links
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          mkdir -p .work
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" > .work/attempt.json
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" | jq --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" --slurpfile metadata .work/attempt.json '{runId:$run,attempt:$attempt,startedAt:$metadata[0].run_started_at,ownerType:$metadata[0].repository.owner.type,artifacts:[.[].artifacts[]]}' > .work/artifacts.json
+      - name: Read release assets for observed publications
+        if: always()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: node tools/pipeline/report.mjs release-links
       - name: Render actual execution results
         if: always()
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
-        run: node tools/pipeline/report.mjs summary --github-summary
+        run: node tools/pipeline/report.mjs summary
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        id: report-download
         if: always()
         with:
           name: run-report
@@ -442,3 +464,9 @@ jobs:
             .work/run-report.json
             .work/summary.md
           include-hidden-files: true
+      - name: Write final human-readable summary
+        if: always()
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+          REPORT_ARTIFACT_ID: ${{ steps.report-download.outputs.artifact-id }}
+        run: node tools/pipeline/report.mjs summary --github-summary

@@ -77,3 +77,26 @@ Production proposals pin a reviewed existing config commit, reject alternate Hel
 routes, verify current certification, and render that exact pairing. No active environment
 Applications or shared production observer were provisioned by this migration. See the
 [operator runbook](operator-runbook.md) and checkpoint before enabling capabilities.
+
+## Human-readable run summary
+
+The report starts with **What happened**: code validation, Docker builds, candidate
+publication and the explicit absence of deployment/QA/certification in source CI. PR
+Docker builds exercise all native application targets from source using cache-only
+outputs; they do not push images or produce runnable image downloads. Their check and
+job log are listed alongside Java/frontend/regression checks. A successful job with no
+affected source work is identified as such. Main reports observed publication separately
+from validation, including failed or skipped publishers; validation success alone is not
+candidate success.
+
+**Downloads and evidence** links the current attempt's Actions artifacts, including logs,
+test reports, native metadata, Docker build records, candidate handoff and this report.
+Individual result-record downloads and selection/comparison details are collapsed.
+Observed publications link their registry package pages and evidence Releases, with
+direct links to available Release assets. Unrelated historical Releases are not listed.
+Missing inventories and expired/earlier-attempt artifacts never become publication claims.
+
+The final summary is written after the report artifact is uploaded so it can link to its
+own download. The downloaded report is the pre-upload rendering and links to the run's
+artifact browser. Summary writes still require `--github-summary`; preview/test runs do
+not write runner summaries.

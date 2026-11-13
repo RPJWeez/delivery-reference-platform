@@ -546,3 +546,219 @@ test("Bake actions use the checkout containing generated cache overlays", () => 
     );
   }
 });
+
+test("PR overview explains Docker builds and links only current-attempt downloads", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "pull_request",
+      REPORT_ARTIFACT_ID: "99",
+      JOB_RESULTS: JSON.stringify({
+        ci: { result: "success" },
+        "container-validate": { result: "success" },
+      }),
+    };
+    planFixture(cwd, env);
+    write(
+      cwd,
+      ".work/artifacts.json",
+      JSON.stringify({
+        runId: "local",
+        attempt: "1",
+        startedAt: "2026-11-13T12:00:00Z",
+        artifacts: [
+          { id: 1, name: "validation-0", created_at: "2026-11-13T12:01:00Z" },
+          {
+            id: 2,
+            name: "previous-attempt",
+            created_at: "2026-11-13T11:59:00Z",
+          },
+          {
+            id: 3,
+            name: "expired",
+            expired: true,
+            created_at: "2026-11-13T12:01:00Z",
+          },
+          {
+            id: 4,
+            name: "another-run",
+            workflow_run: { id: 123 },
+            created_at: "2026-11-13T12:01:00Z",
+          },
+          { id: 5, name: "results-plan", created_at: "2026-11-13T12:01:00Z" },
+        ],
+      }),
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const md = fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8");
+    assert.match(md, /Built from source for verification only/);
+    assert.match(md, /Container source build.*Passed/);
+    assert.match(md, /not deploy the application/);
+    assert.match(md, /\/artifacts\/1/);
+    assert.match(md, /\/artifacts\/99/);
+    assert.doesNotMatch(md, /previous-attempt|expired\]|another-run/);
+    assert.match(md, /<details><summary>Individual job result records/);
+    assert.match(md, /<details><summary>Why checks were selected/);
+  }));
+
+test("main overview exposes publication failure and links recorded packages and release assets", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "push",
+      JOB_RESULTS: JSON.stringify({
+        ci: { result: "success" },
+        "image-evidence": { result: "failure" },
+        "publish-images": { result: "success" },
+      }),
+    };
+    const release = "https://github.com/local/releases/tag/image-run";
+    run(
+      cwd,
+      "tools/pipeline/report.mjs",
+      [
+        "record",
+        "api",
+        "image",
+        "published",
+        "ghcr.io/harbor/tide/api",
+        "",
+        "sha256:abc",
+        release,
+      ],
+      env,
+    );
+    write(
+      cwd,
+      ".work/releases.json",
+      JSON.stringify({
+        run: {
+          repository: "local",
+          id: "local",
+          attempt: "1",
+          sha: "local",
+          event: "push",
+        },
+        notices: [],
+        releases: [
+          {
+            tag: "image-run",
+            url: release,
+            assets: [
+              {
+                name: "api.spdx.json",
+                url: "https://github.com/local/releases/download/image-run/api.spdx.json",
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const md = fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8");
+    assert.match(md, /Validation passed; publication failed/);
+    assert.match(md, /1 image publication\(s\) recorded/);
+    assert.match(md, /users\/harbor\/packages\/container\/tide%2Fapi/);
+    assert.match(md, /releases\/download\/image-run\/api.spdx.json/);
+    assert.match(md, /No complete candidate handoff/);
+    assert.match(md, /Image evidence \(all images\).*Failed/);
+    assert.doesNotMatch(md, /send the exact candidate/);
+  }));
+
+test("stale artifact catalogs are not presented as downloads from this attempt", () =>
+  temporary((cwd) => {
+    write(
+      cwd,
+      ".work/artifacts.json",
+      JSON.stringify({
+        runId: "local",
+        attempt: "9",
+        startedAt: "2026-11-13",
+        artifacts: [{ id: 1, name: "wrong-attempt", created_at: "2026-11-14" }],
+      }),
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"]);
+    const md = fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8");
+    assert.doesNotMatch(md, /wrong-attempt/);
+    assert.match(md, /Download inventory unavailable/);
+  }));
+
+test("release discovery uses observed records and cannot turn PR fixtures into release claims", () =>
+  temporary((cwd) => {
+    write(
+      cwd,
+      "bin/gh",
+      `#!/usr/bin/env node
+if(process.argv.slice(2).join(' ')!=='api repos/local/releases/tags/image-run') process.exit(1);
+console.log(JSON.stringify({assets:[{name:'sbom.json',browser_download_url:'https://github.com/local/releases/download/image-run/sbom.json'}]}));
+`,
+    );
+    fs.chmodSync(path.join(cwd, "bin/gh"), 0o755);
+    const env = {
+      GITHUB_EVENT_NAME: "push",
+      PATH: `${cwd}/bin:${process.env.PATH}`,
+    };
+    run(
+      cwd,
+      "tools/pipeline/report.mjs",
+      [
+        "record",
+        "api",
+        "image",
+        "published",
+        "ghcr.io/harbor/api",
+        "",
+        "sha256:abc",
+        "https://github.com/local/releases/tag/image-run",
+      ],
+      env,
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["release-links"], env);
+    assert.equal(
+      JSON.parse(fs.readFileSync(path.join(cwd, ".work/releases.json")))
+        .releases[0].assets[0].name,
+      "sbom.json",
+    );
+    run(cwd, "tools/pipeline/report.mjs", ["release-links"], {
+      ...env,
+      GITHUB_EVENT_NAME: "pull_request",
+    });
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(cwd, ".work/releases.json")))
+        .releases,
+      [],
+    );
+  }));
+
+test("publishers handle skipped PR-only ancestors but still require successful main validation", () => {
+  const { jobs } = parse(fs.readFileSync(".github/workflows/ci.yml", "utf8"));
+  const names = ["publish-images", "image-evidence", "publish-chart"];
+  for (const name of names) {
+    const condition = jobs[name].if;
+    assert.match(
+      condition,
+      /always\(\)/,
+      `${name} must handle a skipped PR-only ancestor`,
+    );
+    const allowed = (event, ci, images = "success", evidence = "success") =>
+      Function(
+        "always",
+        "github",
+        "needs",
+        `return ${condition.replace(/needs\.([a-z-]+)/g, 'needs["$1"]')}`,
+      )(
+        () => true,
+        { event_name: event, ref: "refs/heads/main" },
+        {
+          ci: { result: ci },
+          "publish-images": { result: images },
+          "image-evidence": { result: evidence },
+        },
+      );
+    assert.equal(allowed("push", "success"), true);
+    assert.equal(allowed("push", "failure"), false);
+    assert.equal(allowed("pull_request", "success"), false);
+    if (name !== "publish-images")
+      assert.equal(allowed("push", "success", "failure"), false);
+    if (name === "publish-chart")
+      assert.equal(allowed("push", "success", "success", "failure"), false);
+  }
+});
