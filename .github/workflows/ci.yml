@@ -67,6 +67,7 @@ jobs:
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
       - name: Publish affected Maven components in dependency order
         env:
