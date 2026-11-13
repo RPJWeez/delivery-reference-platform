@@ -22,14 +22,12 @@ jobs:
     outputs:
       base: ${{ steps.select.outputs.base }}
       images: ${{ steps.select.outputs.images }}
-      libraries: ${{ steps.select.outputs.libraries }}
-      npm: ${{ steps.select.outputs.npm }}
       chart: ${{ steps.select.outputs.chart }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
-      - name: Load publication configuration
+      - name: Load build configuration
         id: config
         run: node tools/pipeline/config.mjs
       - name: Select affected projects with Nx
@@ -45,13 +43,11 @@ jobs:
           echo "Comparison baseline: $base ($reason); head: $GITHUB_SHA"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "images=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=container --json)" >> "$GITHUB_OUTPUT"
-          echo "libraries=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=publish-maven --json)" >> "$GITHUB_OUTPUT"
-          echo "npm=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --projects=tag:type:npm-library --json)" >> "$GITHUB_OUTPUT"
+          echo "images=$(docker buildx bake --print application | jq -c .group.application.targets)" >> "$GITHUB_OUTPUT"
           echo "java=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=mvn-verify --json)" >> "$GITHUB_OUTPUT"
           echo "build=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=build --json)" >> "$GITHUB_OUTPUT"
           echo "typecheck=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=typecheck --json)" >> "$GITHUB_OUTPUT"
-          echo "chart=$(npx nx show projects --affected --base="$base" --head="$GITHUB_SHA" --with-target=chart-package --json)" >> "$GITHUB_OUTPUT"
+          echo 'chart=["application-candidate"]' >> "$GITHUB_OUTPUT"
       - name: Explain affected selection
         env:
           BASE: ${{ steps.select.outputs.base }}
@@ -76,7 +72,7 @@ jobs:
       matrix:
         include:
           - name: Java — compile, test, package
-            command: npx nx affected -t mvn-verify --parallel=2
+            command: test "$(npx nx show projects --affected --with-target=mvn-verify --json)" = '[]' || npx nx run fieldsignal:java-verify
           - name: Frontend — build and typecheck
             command: npx nx affected -t build typecheck --parallel=2
           - name: Pipeline and Helm regression tests
@@ -88,7 +84,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
-      - name: Load publication configuration
+      - name: Load build configuration
         id: config
         run: node tools/pipeline/config.mjs
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
@@ -135,9 +131,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  container-validate:
+    name: Container source build
+    needs: plan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Import trusted main cache without exporting PR results
+        run: |
+          mkdir -p .work
+          docker buildx bake --print application | jq '{target: (.target | with_entries(.value = {"cache-from": ["type=gha,scope=application-" + .key]}))}' > .work/cache.json
+      - uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4
+        with:
+          files: |
+            docker-bake.hcl
+            .work/cache.json
+          targets: application
+          set: "*.output=type=cacheonly"
+      - name: Record container verification
+        if: always()
+        env: { CHECK_RESULT: "${{ job.status }}" }
+        run: node tools/pipeline/report.mjs validation 'Container source build' "$CHECK_RESULT" ''
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: results-container-validation
+          path: .work/results
+          include-hidden-files: true
+
   ci:
     name: Validation complete
-    needs: [plan, validate]
+    needs: [plan, validate, container-validate]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -145,292 +172,225 @@ jobs:
         env:
           PLAN: ${{ needs.plan.result }}
           VALIDATION: ${{ needs.validate.result }}
-        run: test "$PLAN" = success && test "$VALIDATION" = success
-
-  publish-java:
-    needs: [plan, ci]
-    if: github.event_name == 'push' && needs.plan.outputs.libraries != '[]'
-    runs-on: ubuntu-24.04
-    permissions: { contents: read, packages: write }
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-      - name: Load publication configuration
-        id: config
-        run: node tools/pipeline/config.mjs
-      - name: Publish affected Maven components in dependency order
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NX_BASE: ${{ needs.plan.outputs.base }}
-          NX_HEAD: ${{ github.sha }}
-          NX_SKIP_NX_CACHE: "true"
-        run: npx nx affected -t publish-maven --parallel=1
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: results-publish-java-${{ strategy.job-index || '0' }}
-          path: .work/results
-          include-hidden-files: true
-          if-no-files-found: ignore
-
-  java-evidence:
-    needs: [plan, ci, publish-java]
-    if: github.event_name == 'push' && needs.plan.outputs.libraries != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ${{ fromJSON(needs.plan.outputs.libraries) }}
-    uses: ./.github/workflows/java-evidence.yml
-    with: { project: "${{ matrix.project }}" }
-    permissions:
-      { contents: write, packages: read, id-token: write, attestations: write }
-
-  publish-npm:
-    needs: [plan, ci]
-    if: github.event_name == 'push' && needs.plan.outputs.npm != '[]'
-    runs-on: ubuntu-24.04
-    permissions:
-      { contents: write, packages: write, id-token: write, attestations: write }
-    strategy:
-      matrix:
-        project: ${{ fromJSON(needs.plan.outputs.npm) }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: ./.github/actions/setup
-      - name: Load publication configuration
-        id: config
-        run: node tools/pipeline/config.mjs
-      - name: Build and pack selected package
-        id: package
-        env: { PROJECT: "${{ matrix.project }}" }
-        run: |
-          npx nx build "$PROJECT" --skip-nx-cache
-          root=$(npx nx show project "$PROJECT" --json | jq -r .root)
-          mkdir -p .work/packages
-          npm pack "./$root" --pack-destination .work/packages
-          echo "root=$root" >> "$GITHUB_OUTPUT"
-      - name: Publish immutable npm version
-        id: publish
-        env:
-          {
-            NODE_AUTH_TOKEN: "${{ github.token }}",
-            ROOT: "${{ steps.package.outputs.root }}",
-          }
-        run: |
-          set -euo pipefail
-          name=$(jq -r .name "$ROOT/package.json")
-          version=$(jq -r .version "$ROOT/package.json")
-          echo "Package: $name@$version; destination: ${{ steps.config.outputs.npmRegistry }}"
-          actual="sha512-$(openssl dgst -sha512 -binary .work/packages/*.tgz | openssl base64 -A)"
-          echo "integrity=$actual" >> "$GITHUB_OUTPUT"
-          if npm view "$name@$version" dist.integrity --json > .work/integrity.json 2> .work/npm-lookup.err; then
-            [[ "$actual" == "$(jq -r . .work/integrity.json)" ]] || { echo 'Package changed: bump its version'; exit 1; }
-            echo "outcome=reused" >> "$GITHUB_OUTPUT"
-          elif grep -q E404 .work/npm-lookup.err; then
-            echo "outcome=published" >> "$GITHUB_OUTPUT"
-            npm publish .work/packages/*.tgz --registry="${{ steps.config.outputs.npmRegistry }}" --access=public --ignore-scripts
-          else
-            cat .work/npm-lookup.err >&2; exit 1
-          fi
-      - name: Record package publication before evidence generation
-        env:
-          PROJECT: ${{ matrix.project }}
-          ROOT: ${{ steps.package.outputs.root }}
-          OUTCOME: ${{ steps.publish.outputs.outcome }}
-          INTEGRITY: ${{ steps.publish.outputs.integrity }}
-          REGISTRY: ${{ steps.config.outputs.npmRegistry }}
-        run: |
-          version=$(jq -r .version "$ROOT/package.json")
-          node tools/pipeline/report.mjs record "$PROJECT" npm "$OUTCOME" "$REGISTRY/$PROJECT" "$version" "$INTEGRITY" "evidence generation pending"
-      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
-        with:
-          {
-            path: .work/packages,
-            format: spdx-json,
-            output-file: .work/npm.spdx.json,
-            upload-artifact: false,
-          }
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
-        with: { subject-path: ".work/packages/*.tgz" }
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          {
-            subject-path: ".work/packages/*.tgz",
-            sbom-path: .work/npm.spdx.json,
-          }
-      - name: Retain package and SBOM as release evidence
-        env:
-          {
-            GH_TOKEN: "${{ github.token }}",
-            ROOT: "${{ steps.package.outputs.root }}",
-          }
-        run: |
-          version=$(jq -r .version "$ROOT/package.json")
-          name=$(jq -r .name "$ROOT/package.json")
-          tag="${name//@/}-v$version"; tag="${tag//\//-}"
-          sbom=".work/packages/${tag}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.spdx.json"
-          cp .work/npm.spdx.json "$sbom"
-          bash tools/pipeline/retain-release.sh "$tag" .work/packages/*.tgz "$sbom"
-          node tools/pipeline/report.mjs record "$name" npm "${{ steps.publish.outputs.outcome }}" "${{ steps.config.outputs.npmRegistry }}/$name" "$version" "${{ steps.publish.outputs.integrity }}" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag"
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        if: always()
-        with:
-          name: results-publish-npm-${{ strategy.job-index || '0' }}
-          path: .work/results
-          include-hidden-files: true
-          if-no-files-found: ignore
+          CONTAINERS: ${{ needs.container-validate.result }}
+        run: test "$PLAN" = success && test "$VALIDATION" = success && [[ "$CONTAINERS" = success || "$CONTAINERS" = skipped ]]
 
   publish-images:
-    needs: [plan, ci, publish-java, java-evidence, publish-npm]
-    if: >-
-      always() && github.event_name == 'push' && needs.ci.result == 'success'
-      && needs.plan.outputs.images != '[]'
-      && contains(fromJSON('["success","skipped"]'), needs.publish-java.result)
-      && contains(fromJSON('["success","skipped"]'), needs.publish-npm.result)
-      && contains(fromJSON('["success","skipped"]'), needs.java-evidence.result)
+    name: Publish complete image set
+    needs: [plan, ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    permissions:
-      { contents: write, packages: write, id-token: write, attestations: write }
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ${{ fromJSON(needs.plan.outputs.images) }}
+    permissions: { contents: read, packages: write }
+    outputs:
+      targets: ${{ steps.native.outputs.targets }}
+    env:
+      REGISTRY: ghcr.io/${{ github.repository }}
+      BUILD_TAG: sha-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      BUILDX_METADATA_PROVENANCE: max
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-      - uses: ./.github/actions/setup
-      - name: Load publication configuration
-        id: config
-        run: node tools/pipeline/config.mjs
-      - name: Resolve project and build against published dependencies
-        id: component
-        env:
-          PROJECT: ${{ matrix.project }}
-          GITHUB_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          root=$(npx nx show project "$PROJECT" --json | jq -r .root)
-          name=$(basename "$root")
-          echo "root=$root" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/$name" >> "$GITHUB_OUTPUT"
-          if [[ -f "$root/pom.xml" ]]; then
-            ./mvnw -B -ntp -Ppublished-dependencies -pl "$PROJECT" -DskipTests package
-          else
-            # A nested node_modules resolves the registry UI package, not the
-            # workspace symlink. Build tooling remains locked by the root npm ci.
-            npm install --prefix "$root" --workspaces=false --package-lock=false --ignore-scripts --no-save
-            npm run build --workspace "$PROJECT"
-          fi
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
-          {
-            registry: ghcr.io,
-            username: "${{ github.actor }}",
-            password: "${{ github.token }}",
-          }
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        id: image
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Resolve native application build and cache scopes
+        id: native
+        run: |
+          mkdir -p .work
+          echo "REGISTRY=${REGISTRY,,}" >> "$GITHUB_ENV"
+          export REGISTRY="${REGISTRY,,}"
+          docker buildx bake --print application > .work/bake.json
+          echo "targets=$(jq -c '.group.application.targets' .work/bake.json)" >> "$GITHUB_OUTPUT"
+          # Each target has its own Actions cache. Only protected main can export.
+          jq '{target: (.target | with_entries(.value = {"cache-from": ["type=gha,scope=application-" + .key], "cache-to": ["type=gha,mode=max,scope=application-" + .key]}))}' .work/bake.json > .work/cache.json
+      - uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6
+        id: build
         with:
-          context: .
-          file: ${{ steps.component.outputs.root }}/Dockerfile
+          files: |
+            docker-bake.hcl
+            .work/cache.json
+          targets: application
           push: true
-          platforms: ${{ steps.config.outputs.imagePlatforms }}
-          tags: ${{ steps.component.outputs.image }}:sha-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           provenance: mode=max
           sbom: true
-      - name: Record image publication before evidence generation
+          set: "*.platform=linux/amd64"
+      - name: Record native build outputs immediately
+        if: always()
         env:
-          PROJECT: ${{ matrix.project }}
-          IMAGE: ${{ steps.component.outputs.image }}
-          DIGEST: ${{ steps.image.outputs.digest }}
-        run: node tools/pipeline/report.mjs record "$PROJECT" image published "$IMAGE" "" "$DIGEST" "evidence generation pending"
-      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
-        with:
-          image: ${{ steps.component.outputs.image }}@${{ steps.image.outputs.digest }}
-          format: spdx-json
-          output-file: image.spdx.json
-          upload-artifact: false
-      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
-        with:
-          {
-            subject-name: "${{ steps.component.outputs.image }}",
-            subject-digest: "${{ steps.image.outputs.digest }}",
-            push-to-registry: true,
-          }
-      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
-        with:
-          {
-            subject-name: "${{ steps.component.outputs.image }}",
-            subject-digest: "${{ steps.image.outputs.digest }}",
-            sbom-path: image.spdx.json,
-            push-to-registry: true,
-          }
-      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
-        with: { cosign-release: v3.1.4 }
-      - name: Sign image digest
-        env:
-          {
-            IMAGE: "${{ steps.component.outputs.image }}",
-            DIGEST: "${{ steps.image.outputs.digest }}",
-          }
-        run: cosign sign --yes "$IMAGE@$DIGEST"
-      - name: Published component
-        env:
-          {
-            IMAGE: "${{ steps.component.outputs.image }}",
-            DIGEST: "${{ steps.image.outputs.digest }}",
-            PROJECT: "${{ matrix.project }}",
-          }
+          METADATA: ${{ steps.build.outputs.metadata }}
         run: |
-          mv image.spdx.json "${IMAGE##*/}.spdx.json"
-          GH_TOKEN="${{ github.token }}" bash tools/pipeline/retain-release.sh "image-${IMAGE##*/}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" "${IMAGE##*/}.spdx.json"
-          node tools/pipeline/report.mjs record "$PROJECT" image published "$IMAGE" "" "$DIGEST" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/image-${IMAGE##*/}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-
+          printf '%s' "$METADATA" > .work/metadata.json
+          node --input-type=module <<'JS'
+          import fs from 'node:fs'; import {execFileSync} from 'node:child_process';
+          const meta=JSON.parse(fs.readFileSync('.work/metadata.json','utf8') || '{}');
+          const bake=JSON.parse(fs.readFileSync('.work/bake.json','utf8'));
+          for (const [name, result] of Object.entries(meta)) {
+            if (!/^sha256:[a-f0-9]{64}$/.test(result['containerimage.digest'])) continue;
+            const image=bake.target[name].tags[0].split(':')[0];
+            execFileSync('node',['tools/pipeline/report.mjs','record',name,'image','published',image,'',result['containerimage.digest'],'evidence generation pending'], {stdio:'inherit'});
+          }
+          JS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: results-publish-images-${{ strategy.job-index || '0' }}
+          name: native-build
+          path: |
+            .work/bake.json
+            .work/metadata.json
+          include-hidden-files: true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: results-publish-images
+          path: .work/results
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  image-evidence:
+    needs: [ci, publish-images]
+    runs-on: ubuntu-24.04
+    permissions:
+      { contents: write, packages: write, id-token: write, attestations: write }
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.publish-images.outputs.targets) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: native-build, path: .work }
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Read exact native output
+        id: image
+        env: { TARGET: "${{ matrix.target }}" }
+        run: |
+          digest=$(jq -er --arg target "$TARGET" '.[$target]["containerimage.digest"]' .work/metadata.json)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          tag=$(jq -er --arg target "$TARGET" '.target[$target].tags[0]' .work/bake.json)
+          echo "name=${tag%:*}" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: ${{ steps.image.outputs.name }}@${{ steps.image.outputs.digest }}
+          format: spdx-json
+          output-file: .work/image.spdx.json
+          upload-artifact: false
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          sbom-path: .work/image.spdx.json
+          push-to-registry: true
+      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad
+        with: { cosign-release: v3.1.4 }
+      - env:
+          IMAGE: ${{ steps.image.outputs.name }}@${{ steps.image.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cosign sign --yes "$IMAGE"
+          bash tools/pipeline/retain-release.sh "image-${{ matrix.target }}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" .work/image.spdx.json
+          node tools/pipeline/report.mjs record '${{ matrix.target }}' image published '${{ steps.image.outputs.name }}' '' '${{ steps.image.outputs.digest }}' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/image-${{ matrix.target }}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: results-image-evidence-${{ matrix.target }}
           path: .work/results
           include-hidden-files: true
           if-no-files-found: ignore
 
   publish-chart:
-    strategy:
-      matrix:
-        project: ${{ fromJSON(needs.plan.outputs.chart) }}
-    needs: [plan, ci]
-    if: github.event_name == 'push' && needs.plan.outputs.chart != '[]'
+    name: Publish complete candidate; QA pending
+    needs: [ci, publish-images, image-evidence]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       { contents: write, packages: write, id-token: write, attestations: write }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/setup
-      - name: Load publication configuration
-        id: config
-        run: node tools/pipeline/config.mjs
-      - name: Resolve chart location
-        id: location
-        env: { PROJECT: "${{ matrix.project }}" }
-        run: echo "root=$(npx nx show project "$PROJECT" --json | jq -r .root)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: { name: native-build, path: .work }
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4
+        with: { version: v3.18.4 }
+      - name: Discover the one native application candidate chart
+        run: |
+          projects=$(npx nx show projects --with-target=candidate-package --json)
+          [[ "$(jq length <<< "$projects")" = 1 ]]
+          project=$(jq -r '.[0]' <<< "$projects")
+          root=$(npx nx show project "$project" --json | jq -er .root)
+          echo "CHART_ROOT=$root" >> "$GITHUB_ENV"
+      - name: Bind native outputs and verify trusted image evidence
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -euo pipefail
+          node tools/pipeline/candidate.mjs .work/bake.json .work/metadata.json "$CHART_ROOT/values.yaml" .work/bound
+          jq -r '.images[]' .work/bound/build.json | while read -r image; do
+            gh attestation verify "oci://$image" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --source-ref refs/heads/main --source-digest "$GITHUB_SHA"
+            gh attestation verify "oci://$image" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --source-ref refs/heads/main --source-digest "$GITHUB_SHA" --predicate-type https://spdx.dev/Document
+          done
+          cp .work/bound/values.yaml "$CHART_ROOT/values.yaml"
+          cp .work/bound/build.json "$CHART_ROOT/build.json"
+          echo "CANDIDATE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}-candidates/$(helm show chart "$CHART_ROOT" | awk '/^name:/ {print $2}')" >> "$GITHUB_ENV"
+          # Standard Helm package version, unique for every build attempt.
+          VERSION="0.0.$GITHUB_RUN_ID-attempt.$GITHUB_RUN_ATTEMPT" node --input-type=module <<'JS'
+          import fs from 'node:fs'; import {parse,stringify} from 'yaml';
+          const p=process.env.CHART_ROOT+'/Chart.yaml'; const chart=parse(fs.readFileSync(p,'utf8'));
+          chart.version=process.env.VERSION; chart.appVersion=process.env.GITHUB_SHA;
+          fs.writeFileSync(p,stringify(chart));
+          JS
+          helm dependency build --skip-refresh "$CHART_ROOT"
+          helm lint "$CHART_ROOT"
+          helm template candidate "$CHART_ROOT" > .work/rendered.yaml
+          node tools/pipeline/candidate.mjs render .work/rendered.yaml .work/bound/build.json
       - uses: ./.github/actions/publish-chart
-        id: chart
+        id: candidate
+        with:
+          project: application-candidate
+          chart: ${{ env.CHART_ROOT }}
+          registry: ghcr.io/${{ github.repository }}-candidates
+          token: ${{ github.token }}
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-name: ${{ env.CANDIDATE_NAME }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-name: ${{ env.CANDIDATE_NAME }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          predicate-type: https://delivery-reference-platform.dev/candidate-build/v1
+          predicate-path: .work/bound/build.json
+          push-to-registry: true
+      - name: Record immutable handoff; no runtime qualification claimed
+        env: { REFERENCE: "${{ steps.candidate.outputs.reference }}" }
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          fs.writeFileSync('.work/handoff.json',JSON.stringify({candidate:process.env.REFERENCE,source:process.env.GITHUB_SHA,run:process.env.GITHUB_RUN_ID,attempt:process.env.GITHUB_RUN_ATTEMPT,state:'published',qa:'pending',certification:'pending'},null,2));
+          JS
+          node tools/pipeline/report.mjs candidate "$REFERENCE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           {
-            project: "${{ matrix.project }}",
-            chart: "${{ steps.location.outputs.root }}",
-            registry: "ghcr.io/${{ github.repository_owner }}/${{ steps.config.outputs.chartRegistryPath }}",
-            token: "${{ github.token }}",
+            name: candidate-handoff,
+            path: .work/handoff.json,
+            include-hidden-files: true,
           }
-
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: results-publish-chart-${{ strategy.job-index || '0' }}
+          name: results-publish-chart
           path: .work/results
           include-hidden-files: true
           if-no-files-found: ignore
@@ -444,11 +404,10 @@ jobs:
       [
         plan,
         validate,
+        container-validate,
         ci,
-        publish-java,
-        java-evidence,
-        publish-npm,
         publish-images,
+        image-evidence,
         publish-chart,
       ]
     if: always()

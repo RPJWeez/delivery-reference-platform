@@ -21,14 +21,17 @@
       "{workspaceRoot}/.dockerignore",
       "{workspaceRoot}/.github/actions/**/*",
       "{workspaceRoot}/tools/pipeline/**/*",
-      "{workspaceRoot}/tools/publish-maven.sh"
+      "{workspaceRoot}/docker-bake.hcl",
+      "{workspaceRoot}/pom.xml",
+      "{workspaceRoot}/package.json"
     ]
   },
   "targetDefaults": {
     "build": {
       "dependsOn": ["^build"],
       "cache": true,
-      "inputs": ["default", "^default"]
+      "inputs": ["default", "^default"],
+      "outputs": ["{projectRoot}/dist"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
@@ -39,9 +42,6 @@
       "cache": true
     },
     "container": {
-      "inputs": ["default", "^default"]
-    },
-    "publish-maven": {
       "inputs": ["default", "^default"]
     },
     "chart-package": {

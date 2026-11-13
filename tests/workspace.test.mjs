@@ -14,68 +14,6 @@ import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { parseAllDocuments } from "yaml";
 
-test("Maven evidence resolves POM coordinates independently of Nx names", () => {
-  const workflow = parseAllDocuments(
-    readFileSync(".github/workflows/java-evidence.yml", "utf8"),
-  )[0].toJSON();
-  const script = workflow.jobs.evidence.steps.find(
-    (step) => step.id === "artifact",
-  ).run;
-  for (const [project, root, coordinate] of [
-    ["fieldsignal", ".", "io.fieldsignal:fieldsignal-parent:0.1.1:pom"],
-    [
-      "io.fieldsignal:event-model",
-      "libraries/event-model",
-      "io.fieldsignal:event-model:0.1.1:jar",
-    ],
-  ]) {
-    const directory = mkdtempSync(
-      join(tmpdir(), "fieldsignal-maven-evidence-"),
-    );
-    try {
-      mkdirSync(join(directory, "bin"));
-      mkdirSync(join(directory, root), { recursive: true });
-      writeFileSync(
-        join(directory, root, "pom.xml"),
-        readFileSync(join(root, "pom.xml")),
-      );
-      writeFileSync(
-        join(directory, "bin/npx"),
-        `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify({ root })}'\n`,
-        { mode: 0o755 },
-      );
-      writeFileSync(
-        join(directory, "mvnw"),
-        '#!/bin/sh\nprintf "%s\\n" "$@" >> "$CAPTURE"\n',
-        { mode: 0o755 },
-      );
-      const capture = join(directory, "arguments");
-      execFileSync("bash", ["-c", script], {
-        cwd: directory,
-        env: {
-          ...process.env,
-          PATH: `${directory}/bin:${process.env.PATH}`,
-          PROJECT: project,
-          CAPTURE: capture,
-          GITHUB_OUTPUT: join(directory, "output"),
-        },
-      });
-      const argumentsUsed = readFileSync(capture, "utf8").split("\n");
-      assert(argumentsUsed.includes(`-Dartifact=${coordinate}`));
-      assert(
-        argumentsUsed.includes(coordinate.split(":").slice(0, 2).join(":")),
-      );
-      assert(
-        readFileSync(join(directory, "output"), "utf8").includes(
-          `tag=${coordinate.split(":")[1]}-v${coordinate.split(":")[2]}`,
-        ),
-      );
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
-  }
-});
-
 test("affected publication has the history needed to compare commits", () => {
   const workflow = parseAllDocuments(
     readFileSync(".github/workflows/ci.yml", "utf8"),

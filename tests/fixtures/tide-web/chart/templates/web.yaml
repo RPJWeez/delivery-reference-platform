@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tide-status }
+spec:
+  selector: { matchLabels: { app: tide-status } }
+  template:
+    metadata: { labels: { app: tide-status } }
+    spec:
+      containers:
+        - name: status
+          image: { { .Values.application.workloads.status.image | quote } }
+          ports: [{ containerPort: 8080 }]

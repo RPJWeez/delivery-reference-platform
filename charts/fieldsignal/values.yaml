@@ -1,0 +1,25 @@
+application:
+  releaseVersion: source
+  workloads:
+    ingestion-service:
+      image: BUILD_OUTPUT
+      port: 8080
+      replicas: 1
+    incident-service:
+      image: BUILD_OUTPUT
+      port: 8080
+      replicas: 1
+    station-console:
+      env: { API_UPSTREAM: "fieldsignal-ingestion-service:8080" }
+      image: BUILD_OUTPUT
+      port: 8080
+      replicas: 1
+      livenessPath: /healthz
+      readinessPath: /healthz
+    operator-console:
+      env: { API_UPSTREAM: "fieldsignal-incident-service:8080" }
+      image: BUILD_OUTPUT
+      port: 8080
+      replicas: 1
+      livenessPath: /healthz
+      readinessPath: /healthz

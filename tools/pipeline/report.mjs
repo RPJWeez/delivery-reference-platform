@@ -62,6 +62,18 @@ if (command === "record") {
   console.log(
     `${project}: ${outcome}\nDestination: ${destination}\nVersion: ${version || "—"}\nDigest: ${digest || "—"}\nEvidence: ${evidence || "not recorded yet"}`,
   );
+} else if (command === "candidate") {
+  if (run.event !== "push")
+    throw Error("Only a protected publication run may record a candidate");
+  if (!/^ghcr\.io\/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$/.test(args[0]))
+    throw Error("Candidate must be digest addressed");
+  save("candidate", {
+    kind: "candidate",
+    reference: args[0],
+    state: "published",
+    qa: "pending",
+    certification: "pending",
+  });
 } else if (command === "validation") {
   const [name, outcome, lint = "skipped"] = args;
   const log = fs.existsSync(".work/validation.log")
@@ -112,9 +124,19 @@ if (command === "record") {
   }
   const runUrl = `${process.env.GITHUB_SERVER_URL || "https://github.com"}/${run.repository}/actions/runs/${run.id}`;
   const isPR = run.event === "pull_request";
-  const publications = records.filter(
-    (record) => record.kind === "publication",
-  );
+  const publications = [
+    ...records
+      .filter((record) => record.kind === "publication")
+      .reduce((unique, record) => {
+        const key = `${record.type}:${record.project}:${record.digest}`;
+        const previous = unique.get(key);
+        // Image publication and its later evidence job describe one observed output.
+        if (!previous || !/^https:\/\//.test(previous.evidence || ""))
+          unique.set(key, record);
+        return unique;
+      }, new Map())
+      .values(),
+  ];
   const results = isPR
     ? []
     : publications.filter((record) => record.type !== "maven-evidence");
@@ -144,7 +166,7 @@ if (command === "record") {
     "",
     isPR
       ? "**Publishing disabled.** Pull requests validate changes only. No packages, images, or charts were published by this workflow."
-      : "Main branch runs validate changes, then publish affected components. Publication and evidence results are listed separately below.",
+      : "Main branch runs validate changes, then build the complete application candidate. Publication and evidence results are listed separately below.",
     "",
     `Commit: \`${escape(run.sha.slice(0, 12))}\` · [Open workflow run](${runUrl})`,
     "",
@@ -268,6 +290,17 @@ if (command === "record") {
         "",
         "</details>",
       );
+  }
+  if (!isPR) {
+    const candidate = records.find((record) => record.kind === "candidate");
+    lines.push(
+      "",
+      "## Application candidate",
+      "",
+      candidate
+        ? `Candidate published: ${escape(candidate.reference)}. QA pending; certification pending. No application deployment occurred in CI.`
+        : "No complete candidate handoff was recorded. Individual publications do not establish candidate completeness or runtime qualification.",
+    );
   }
   lines.push(
     "",

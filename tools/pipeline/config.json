@@ -1,7 +1,7 @@
 {
   "javaVersion": "21",
   "nodeVersion": "22.22.0",
-  "npmRegistry": "https://npm.pkg.github.com",
+  "npmRegistry": "https://registry.npmjs.org",
   "chartRegistryPath": "charts",
-  "imagePlatforms": "linux/amd64,linux/arm64"
+  "imagePlatforms": "linux/amd64"
 }

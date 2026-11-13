@@ -1,5 +1,5 @@
 name: Pinned build toolchain
-description: Install Java, Node, locked npm dependencies, and GitHub package authentication
+description: Install Java, Node, locked npm dependencies, and public dependency caches
 runs:
   using: composite
   steps:
@@ -7,23 +7,21 @@ runs:
       id: config
       shell: bash
       run: node tools/pipeline/config.mjs
-    - name: Resolve Maven registry
-      shell: bash
-      run: echo "MAVEN_REPOSITORY_URL=${MAVEN_REPOSITORY_URL:-https://maven.pkg.github.com/$GITHUB_REPOSITORY}" >> "$GITHUB_ENV"
     - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
       with:
         distribution: temurin
         java-version: ${{ steps.config.outputs.javaVersion }}
-        server-id: github
-        server-username: GITHUB_ACTOR
-        server-password: GITHUB_TOKEN
+        cache: maven
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: ${{ steps.config.outputs.nodeVersion }}
-        registry-url: ${{ steps.config.outputs.npmRegistry }}
         cache: npm
-    - name: Configure workspace package scopes
-      shell: bash
-      run: node tools/pipeline/npm-scopes.mjs
     - shell: bash
       run: npm ci
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .nx/cache
+        key: nx-${{ runner.os }}-${{ runner.arch }}-${{ github.ref }}-${{ github.sha }}-${{ github.run_attempt }}
+        restore-keys: |
+          nx-${{ runner.os }}-${{ runner.arch }}-${{ github.ref }}-
+          nx-${{ runner.os }}-${{ runner.arch }}-refs/heads/main-
