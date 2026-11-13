@@ -216,7 +216,7 @@ jobs:
         with:
           image: ${{ steps.component.outputs.image }}@${{ steps.image.outputs.digest }}
           format: spdx-json
-          output-file: .work/image.spdx.json
+          output-file: image.spdx.json
           upload-artifact: false
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
         with:
@@ -230,7 +230,7 @@ jobs:
           {
             subject-name: "${{ steps.component.outputs.image }}",
             subject-digest: "${{ steps.image.outputs.digest }}",
-            sbom-path: .work/image.spdx.json,
+            sbom-path: image.spdx.json,
             push-to-registry: true,
           }
       - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
