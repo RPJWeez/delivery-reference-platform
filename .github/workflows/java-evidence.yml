@@ -23,17 +23,18 @@ jobs:
         run: |
           set -euo pipefail
           root=$(npx nx show project "$PROJECT" --json | jq -r .root)
-          artifact="${PROJECT##*:}"
-          version=$(python3 - "$root/pom.xml" <<'PY'
+          read -r group artifact version extension < <(python3 - "$root/pom.xml" <<'PY'
           import sys, xml.etree.ElementTree as E
-          print(E.parse(sys.argv[1]).getroot().findtext('{http://maven.apache.org/POM/4.0.0}version'))
+          pom = E.parse(sys.argv[1]).getroot()
+          ns = '{http://maven.apache.org/POM/4.0.0}'
+          def coordinate(key):
+              return pom.findtext(ns + key) or pom.findtext(ns + 'parent/' + ns + key)
+          print(*(coordinate(key) for key in ('groupId', 'artifactId', 'version')), pom.findtext(ns + 'packaging', 'jar'))
           PY
           )
-          extension=jar
-          if [[ "$root" == . ]]; then extension=pom; fi
           mkdir -p .work/subjects
-          ./mvnw -N -B -ntp -Ppublished-dependencies dependency:copy -Dartifact="$PROJECT:$version:$extension" -DoutputDirectory="$PWD/.work/subjects" -Dtransitive=false
-          ./mvnw -B -ntp -Ppublished-dependencies -pl "$PROJECT" org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom
+          ./mvnw -N -B -ntp -Ppublished-dependencies dependency:copy -Dartifact="$group:$artifact:$version:$extension" -DoutputDirectory="$PWD/.work/subjects" -Dtransitive=false
+          ./mvnw -B -ntp -Ppublished-dependencies -pl "$group:$artifact" org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom
           echo "sbom=$root/target/bom.json" >> "$GITHUB_OUTPUT"
           echo "tag=$artifact-v$version" >> "$GITHUB_OUTPUT"
       - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
