@@ -1,4 +1,4 @@
-name: Qualify a published FieldSignal application
+name: Qualify a published application
 description: Test the exact OCI candidate through one Argo CD Application in disposable kind.
 inputs:
   reference:
@@ -11,6 +11,24 @@ inputs:
       required: true,
       description: Commit containing the qualification environment values,
     }
+  namespace:
+    default: qualification
+    description: Disposable application namespace
+  application:
+    default: qualification
+    description: Argo Application name
+  dependencies:
+    required: true
+    description: Application dependency provisioning script, relative to test repository
+  test-command:
+    required: true
+    description: Application-owned qualification test command
+  test-root:
+    required: true
+    description: Absolute path to the checked-out application test source
+  test-revision:
+    required: true
+    description: Exact source commit containing the tests and dependency provisioning script
 outputs:
   predicate:
     value: .work/qualification.json
@@ -18,25 +36,33 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Verify exact application test checkout
+      shell: bash
+      env:
+        TEST_ROOT: ${{ inputs.test-root }}
+        TEST_REVISION: ${{ inputs.test-revision }}
+      run: |
+        set -euo pipefail
+        test "$(git -C "$TEST_ROOT" rev-parse HEAD)" = "$TEST_REVISION"
+        test -z "$(git -C "$TEST_ROOT" status --porcelain --untracked-files=normal)"
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with: { node-version: "22.22.0" }
     - uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3
       with:
         {
           version: v0.31.0,
-          cluster_name: fieldsignal-qualification,
+          cluster_name: "${{ inputs.namespace }}",
           wait: 120s,
         }
     - name: Install platform dependencies and pinned Argo CD
       shell: bash
       env:
-        PLATFORM_ROOT: ${{ github.action_path }}/../../..
+        PLATFORM_ROOT: ${{ inputs.test-root }}
       run: |
         set -euo pipefail
-        kubectl create namespace fieldsignal-qualification
-        kubectl apply -n fieldsignal-qualification -f "$PLATFORM_ROOT/infra/qualification/dependencies.yaml"
-        kubectl wait -n fieldsignal-qualification --for=condition=complete job/fieldsignal-test-topics --timeout=240s
-        kubectl rollout status -n fieldsignal-qualification deployment/fieldsignal-test-postgres --timeout=120s
+        kubectl create namespace ${{ inputs.namespace }}
+        cd "$PLATFORM_ROOT"
+        QUALIFICATION_NAMESPACE="${{ inputs.namespace }}" bash "$PLATFORM_ROOT/${{ inputs.dependencies }}"
         kubectl create namespace argocd
         kubectl apply --server-side -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/94037c4d4e1af4bd0651d37a179fbd9e347e668c/manifests/core-install.yaml
         kubectl rollout status -n argocd deployment/argocd-repo-server --timeout=240s
@@ -56,53 +82,40 @@ runs:
           jq --arg digest "${REFERENCE##*@}" --arg revision "$DEPLOYMENT_REVISION" \
             '.spec.sources[0].targetRevision = $digest | .spec.sources[1].targetRevision = $revision' |
           kubectl apply -f -
-        kubectl wait -n argocd --for=jsonpath='{.status.sync.status}'=Synced application/fieldsignal-qualification --timeout=300s
-        kubectl wait -n argocd --for=jsonpath='{.status.health.status}'=Healthy application/fieldsignal-qualification --timeout=300s
-    - name: Business-functional and replay verification
+        kubectl wait -n argocd --for=jsonpath='{.status.sync.status}'=Synced application/${{ inputs.application }} --timeout=300s
+        kubectl wait -n argocd --for=jsonpath='{.status.health.status}'=Healthy application/${{ inputs.application }} --timeout=300s
+    - name: Application qualification tests
       shell: bash
       env:
-        PLATFORM_ROOT: ${{ github.action_path }}/../../..
-        FIELDSIGNAL_TEST_NAMESPACE: fieldsignal-qualification
-        KAFKA_TEST_BOOTSTRAP: fieldsignal-test-kafka:9092
-        STATION_URL: http://127.0.0.1:15173
-        OPERATIONS_URL: http://127.0.0.1:15174
-        INGESTION_URL: http://127.0.0.1:18081
-        INCIDENT_URL: http://127.0.0.1:18082
+        PLATFORM_ROOT: ${{ inputs.test-root }}
+        QUALIFICATION_NAMESPACE: ${{ inputs.namespace }}
+        TEST_COMMAND: ${{ inputs.test-command }}
       run: |
         set -euo pipefail
-        npm ci --prefix "$PLATFORM_ROOT"
         cd "$PLATFORM_ROOT"
-        npx playwright install --with-deps chromium
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-station-console 15173:8080 > /tmp/stations.log 2>&1 &
-        station_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-operator-console 15174:8080 > /tmp/operators.log 2>&1 &
-        operator_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-ingestion-service 18081:8080 > /tmp/ingestion.log 2>&1 &
-        ingestion_pid=$!
-        kubectl -n fieldsignal-qualification port-forward service/fieldsignal-incident-service 18082:8080 > /tmp/incidents.log 2>&1 &
-        incident_pid=$!
-        trap 'kill "$station_pid" "$operator_pid" "$ingestion_pid" "$incident_pid" 2>/dev/null || true' EXIT
-        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15173/healthz
-        curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15174/healthz
-        npm run test:functional
-        python3 tools/smoke.py
+        bash -euo pipefail -c "$TEST_COMMAND"
     - name: Record exact qualification inputs
       shell: bash
       env:
         REFERENCE: ${{ inputs.reference }}
         DEPLOYMENT_REVISION: ${{ inputs.deployment-revision }}
-        PLATFORM_ROOT: ${{ github.action_path }}/../../..
+        PLATFORM_ROOT: ${{ inputs.test-root }}
+        TEST_REVISION: ${{ inputs.test-revision }}
+        TEST_COMMAND: ${{ inputs.test-command }}
+        DEPENDENCIES: ${{ inputs.dependencies }}
       run: |
         mkdir -p .work
         python3 - <<'PY'
-        import hashlib, json, os, platform
+        import json, os, platform
         from pathlib import Path
         root = Path(os.environ['PLATFORM_ROOT'])
-        files = [root/'package-lock.json', root/'tests/functional/fieldsignal.spec.ts', root/'tools/smoke.py']
-        suite = hashlib.sha256(b''.join(p.read_bytes() for p in files)).hexdigest()
+        import subprocess
+        revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+        assert revision == os.environ['TEST_REVISION'], 'test checkout must match declared revision'
         result = {'result': 'passed', 'candidate': os.environ['REFERENCE'],
                   'deploymentRevision': os.environ['DEPLOYMENT_REVISION'],
-                  'testSuiteDigest': 'sha256:'+suite, 'architecture': platform.machine(),
+                  'testRevision': revision, 'testCommand': os.environ['TEST_COMMAND'],
+                  'dependencies': os.environ['DEPENDENCIES'], 'architecture': platform.machine(),
                   'run': os.environ['GITHUB_SERVER_URL']+'/'+os.environ['GITHUB_REPOSITORY']+'/actions/runs/'+os.environ['GITHUB_RUN_ID']}
         Path('.work/qualification.json').write_text(json.dumps(result, indent=2)+'\n')
         PY
@@ -112,14 +125,13 @@ runs:
       run: |
         kubectl get applications -n argocd -o yaml || true
         kubectl get pods -A || true
-        kubectl get events -n fieldsignal-qualification --sort-by=.lastTimestamp || true
+        kubectl get events -n ${{ inputs.namespace }} --sort-by=.lastTimestamp || true
         kubectl logs -n argocd statefulset/argocd-application-controller --tail=100 || true
-        kubectl logs -n fieldsignal-qualification deployment/fieldsignal-ingestion-service --tail=100 || true
-        kubectl logs -n fieldsignal-qualification deployment/fieldsignal-incident-service --tail=100 || true
+        kubectl logs -n ${{ inputs.namespace }} --all-containers --all-pods -l app.kubernetes.io/instance=${{ inputs.application }} --tail=100 || true
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: failure()
       with:
         name: functional-failure-evidence
-        path: ${{ github.action_path }}/../../../test-results
+        path: ${{ inputs.test-root }}/test-results
         retention-days: 14
         if-no-files-found: ignore

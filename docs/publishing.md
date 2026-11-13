@@ -24,3 +24,5 @@ A newly published service does not automatically become part of FieldSignal. Add
 GitHub may initially create granular packages as private even when source is public. Set the demo's packages public before anonymous Argo pulls. Never change token scopes or visibility automatically merely to bypass a failed pull.
 
 Do not publish PR builds to long-lived package coordinates. Retain qualified/promoted candidates and all referenced component versions/evidence. Temporary reports use native Actions retention. Registry cleanup starts as a report, not deletion; public storage currently removes the need for aggressive garbage collection.
+
+See [pipeline operation](pipeline.md) for the run report, exact SBOM retention policy, retry behavior, and template configuration. Maven/npm/chart SBOM files are retained as component/run/attempt release assets; image SBOM files have per-component run releases.

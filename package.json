@@ -14,7 +14,7 @@
     "dev:stations": "npm run dev --workspace @fieldsignal/station-console",
     "dev:operations": "npm run dev --workspace @fieldsignal/operator-console",
     "typecheck": "nx run-many -t typecheck",
-    "test:workspace": "node --test tests/workspace.test.mjs",
+    "test:workspace": "node --test tests/workspace.test.mjs tests/pipeline.test.mjs",
     "test:functional": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

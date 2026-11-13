@@ -14,10 +14,14 @@ print(value('groupId', value('parent/groupId')), value('artifactId'), value('ver
 PY
 )
 [[ "$version" != *SNAPSHOT* ]] || { echo 'Release versions cannot be snapshots'; exit 1; }
+echo "::group::Build Maven release $group:$artifact:$version"
 ./mvnw -B -ntp -Ppublished-dependencies -pl "$group:$artifact" -DskipTests package
+echo "::endgroup::"
 directory=$(mktemp -d)
 trap 'rm -rf "$directory"' EXIT
-base="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/${group//.//}/$artifact/$version/$artifact-$version"
+registry=$(./mvnw -q -N -Dstyle.color=never help:evaluate -Dexpression=project.distributionManagement.repository.url -DforceStdout)
+echo "Publishing $group:$artifact:$version to $registry"
+base="${registry}/${group//.//}/$artifact/$version/$artifact-$version"
 status=$(curl --silent --show-error --location --user "$GITHUB_ACTOR:$GITHUB_TOKEN" --output "$directory/pom" --write-out '%{http_code}' "$base.pom")
 if [[ "$status" == 200 ]]; then
   cmp "$root/pom.xml" "$directory/pom" || { echo 'Published POM differs: bump the component version'; exit 1; }
@@ -25,10 +29,19 @@ if [[ "$status" == 200 ]]; then
     curl --fail --silent --show-error --location --user "$GITHUB_ACTOR:$GITHUB_TOKEN" "$base.jar" --output "$directory/artifact.jar"
     cmp "$root/target/$artifact-$version.jar" "$directory/artifact.jar" || { echo 'Published JAR differs: bump the component version'; exit 1; }
   fi
+  outcome=reused
   echo "Reusing identical immutable coordinate $group:$artifact:$version"
 elif [[ "$status" == 404 ]]; then
+  outcome=published
   ./mvnw -B -ntp -Ppublished-dependencies -pl "$group:$artifact" -DskipTests deploy
 else
   echo "Registry lookup failed ($status); refusing to publish"
   exit 1
 fi
+
+subject="$root/pom.xml"
+if [[ "$packaging" != pom ]]; then subject="$root/target/$artifact-$version.jar"; fi
+digest="sha256:$(shasum -a 256 "$subject" | cut -d ' ' -f 1)"
+project="$group:$artifact"
+if [[ "$root" == . ]]; then project=$(node -p 'require("./package.json").name'); fi
+node tools/pipeline/report.mjs record "$project" maven "$outcome" "$registry" "$version" "$digest"
