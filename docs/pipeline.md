@@ -33,7 +33,8 @@ candidate adapter binds native digests and verifies rendered image completeness.
 Caches are explicit and independent:
 
 - setup-node caches public npm downloads; setup-java caches Maven downloads.
-- Actions cache persists `.nx/cache`. Native task input hashes include source, native
+- Actions cache persists `.nx/cache` with distinct validation matrix scopes so
+  producers cannot race to save one incomplete shared cache key. Native task input hashes include source, native
   manifests/locks, toolchain config and shared Nx/workflow inputs. Java and frontend
   outputs are declared and tested for restoration after deletion.
 - Protected-main Bake imports/exports Actions BuildKit caches with one scope per native
