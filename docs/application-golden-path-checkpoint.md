@@ -108,3 +108,11 @@ wrapper binding, local dependency vendoring, lint, versioned packaging, archive 
 image-closure validation and negative override checks. All 42 focused tests and actionlint
 passed. Candidate publication was not reached in the failed run; no artifacts were deleted
 and no merge/main rerun/shared deployment was performed by this fix.
+
+Package-link follow-up (codex/package-summary-links): run 43530534029 successfully
+published the candidate at sha256:d3b5029044bbd2d0ed763353f20e120b7ea2fdc756690f4045fde27415bf9788.
+The owner-level GitHub package URL returned HTTP 500 (also for an application image),
+while the repository-scoped /pkgs/container route returned HTTP 200. Anonymous Helm
+pull by exact OCI digest succeeded and matched that digest. Summary package links now
+use the verified repository route; no republishing, candidate mutation or deployment
+is involved. Nested candidate/image path and single-encoding regression coverage added.

@@ -656,7 +656,7 @@ test("main overview exposes publication failure and links recorded packages and 
     const md = fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8");
     assert.match(md, /Validation passed; publication failed/);
     assert.match(md, /1 image publication\(s\) recorded/);
-    assert.match(md, /users\/harbor\/packages\/container\/tide%2Fapi/);
+    assert.match(md, /local\/pkgs\/container\/tide%2Fapi/);
     assert.match(md, /releases\/download\/image-run\/api.spdx.json/);
     assert.match(md, /No complete candidate handoff/);
     assert.match(md, /Image evidence \(all images\).*Failed/);
@@ -828,4 +828,50 @@ test("missing or malformed metadata fails before a publication record can be pro
       );
       assert.equal(fs.existsSync(path.join(cwd, ".work/metadata.json")), false);
     }
+  }));
+
+test("nested GHCR links use the repository package route for candidates and images", () =>
+  temporary((cwd) => {
+    const env = {
+      GITHUB_EVENT_NAME: "push",
+      GITHUB_REPOSITORY: "RPJWeez/delivery-reference-platform",
+      JOB_RESULTS: JSON.stringify({ ci: { result: "success" } }),
+    };
+    for (const [name, type, reference] of [
+      [
+        "application-candidate",
+        "chart",
+        `ghcr.io/rpjweez/delivery-reference-platform-candidates/fieldsignal@sha256:${"a".repeat(64)}`,
+      ],
+      [
+        "ingestion-service",
+        "image",
+        "ghcr.io/rpjweez/delivery-reference-platform/ingestion-service",
+      ],
+    ])
+      run(
+        cwd,
+        "tools/pipeline/report.mjs",
+        [
+          "record",
+          name,
+          type,
+          "published",
+          reference,
+          "",
+          `sha256:${"a".repeat(64)}`,
+        ],
+        env,
+      );
+    run(cwd, "tools/pipeline/report.mjs", ["summary"], env);
+    const md = fs.readFileSync(path.join(cwd, ".work/summary.md"), "utf8");
+    assert.match(
+      md,
+      /https:\/\/github.com\/RPJWeez\/delivery-reference-platform\/pkgs\/container\/delivery-reference-platform-candidates%2Ffieldsignal/,
+    );
+    assert.match(
+      md,
+      /\/pkgs\/container\/delivery-reference-platform%2Fingestion-service/,
+    );
+    assert.doesNotMatch(md, /github.com\/(users|orgs)\/|%252F/);
   }));
