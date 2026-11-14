@@ -50,3 +50,21 @@ The companion owns candidate consumption, QA/certification policy, immutable env
 configuration, promotion and production health. None of those capabilities is activated
 merely by extracting CI. See [release protocol](release-protocol.md) and
 [operator recovery](operator-runbook.md).
+
+## Reading the run summary
+
+`Source verification` runs the app-native `npm run verify` command. It includes the
+workspace checks, native Java tests/package, frontend builds/typechecks, and Helm lint.
+The summary links the actual nested `delivery / ...` jobs and includes bounded native
+tool output and cache-hit disclosures. A cached result is reuse of a validated task,
+not evidence that its tests executed afresh on that runner.
+
+PRs build all application images without publishing them. On main, the separate PR-only
+container check is intentionally skipped because `Publish complete image set` performs
+the image builds and push. Image-evidence jobs and final candidate publication are shown
+separately. Successful source validation/image publication does not establish a complete
+candidate if chart publication fails. Browser/API/Kafka qualification remains in QA CD.
+
+The former report still expected standalone job names and affected-validation categories;
+that made shared workflow execution appear unavailable despite successful builds/tests.
+The corrected pipeline pin reports the shared execution model directly.
