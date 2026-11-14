@@ -41,7 +41,7 @@ services:
   verify:
     profiles: [tools]
     build:
-      context: https://github.com/RPJWeez/pipelines.git#4df67d87beef51203778754efe27cfc280111423
+      context: https://github.com/RPJWeez/pipelines.git#9a16076f95de084d6a394d619a658123b7f0b8e0
       dockerfile: verification/Dockerfile
     volumes:
       - .:/source:ro

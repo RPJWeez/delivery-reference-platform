@@ -8,7 +8,8 @@ that these packages have no external consumers during the golden-path migration.
 
 Maven/npm own compilation and dependencies. Nx remains responsible for affected
 selection, orchestration and task caching. Maven dependency inference remains pinned;
-execution uses one native reactor target. The experimental plugin's 113-task lifecycle
+local full verification uses one native reactor target; CI uses separately named native
+Maven module jobs, building source dependencies with `-am`. The experimental plugin's 113-task lifecycle
 execution achieved only 70 cache hits on an unchanged repeat and produced recursive
 terminal records. The native reactor task restores its declared outputs in one cache
 entry. See the checkpoint for measured verification and remaining acceptance gates.
