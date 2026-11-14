@@ -17,7 +17,8 @@
     "test:workspace": "node --test tests/*.test.mjs",
     "test:functional": "playwright test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "verify": "npm run test:workspace && nx run fieldsignal:java-verify && nx run-many -t build typecheck --parallel=2 && nx run application-chart:lint"
   },
   "devDependencies": {
     "@nx/js": "24.0.6",

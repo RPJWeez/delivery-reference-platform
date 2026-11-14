@@ -1,5 +1,0 @@
-application:
-  workloads:
-    api: { image: BUILD_OUTPUT }
-    drain: { image: "BUILD_OUTPUT:worker" }
-    sweep: { image: "BUILD_OUTPUT:worker" }
