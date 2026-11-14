@@ -40,7 +40,11 @@ services:
     depends_on: [incident-service]
   verify:
     profiles: [tools]
-    build: { context: ., dockerfile: tools/verification/Dockerfile }
-    volumes: [nx-cache:/workspace/.nx/cache]
+    build:
+      context: https://github.com/RPJWeez/pipelines.git#22cc7b8c54fbc5c543c163c0a8f6bb0ca1388a76
+      dockerfile: verification/Dockerfile
+    volumes:
+      - .:/source:ro
+      - nx-cache:/workspace/.nx/cache
 volumes:
   nx-cache:

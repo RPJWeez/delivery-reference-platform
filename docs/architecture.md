@@ -13,6 +13,9 @@ execution achieved only 70 cache hits on an unchanged repeat and produced recurs
 terminal records. The native reactor task restores its declared outputs in one cache
 entry. See the checkpoint for measured verification and remaining acceptance gates.
 
+A pinned reusable workflow in `RPJWeez/pipelines` owns delivery scripts, evidence,
+reporting, QA mechanics and verification toolchains. The app owns native build/runtime
+declarations and business tests. See [pipeline migration](shared-pipeline-migration.md).
 Source CI validates PRs and prepares complete immutable candidates on protected main.
 Dockerfiles consume source and run native tests/builds; host target/dist/node_modules
 are excluded. Bake's application group owns build outputs. The app-owned Helm chart

@@ -22,7 +22,7 @@ infra-down:
 	docker compose -f infra/local/compose.yaml down
 
 smoke:
-	python3 tools/smoke.py
+	python3 tests/smoke.py
 
 functional:
 	npm run test:functional

@@ -12,8 +12,9 @@
         "{workspaceRoot}/apps/*/src/**/*",
         "{workspaceRoot}/libraries/*/pom.xml",
         "{workspaceRoot}/libraries/*/src/**/*",
-        "{workspaceRoot}/tools/pipeline/config.json",
-        "{workspaceRoot}/nx.json"
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/.github/workflows/ci.yml",
+        "{workspaceRoot}/compose.yaml"
       ],
       "outputs": [
         "{workspaceRoot}/apps/*/target",

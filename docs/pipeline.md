@@ -1,102 +1,52 @@
 # Pipeline operation
 
-PRs validate merge commits. Protected main publishes complete immutable candidates;
-source CI never deploys, QA-tests or certifies an application.
+Application CI calls the versioned reusable workflow in
+[RPJWeez/pipelines](https://github.com/RPJWeez/pipelines/tree/codex/extract-application-delivery).
+The app owns `.github/workflows/ci.yml`, native Maven/npm/Nx builds, Docker/Bake,
+Compose/Helm, contracts, and business tests. Shared scripts, actions, pipeline regressions,
+portability fixtures, and the verification toolchain live in the pipeline repository.
 
-## Reports and failure states
+## Developer workflow
 
-The Run report distinguishes checks, affected validation and actual publication records.
-PR reports explicitly disable publication and reject stray publication records. Published
-fragments are reported even when subsequent evidence fails. Missing completion records
-remain unconfirmed/not attempted; selection alone never establishes publication.
-Candidate handoff is recorded only after image evidence, chart publication and candidate
-attestations succeed. A published chart with incomplete evidence is not a complete
-handoff. QA, certification, promotion and observed health are separate states.
+Use `make dev`, `make verify`, and `make stop`. Both local container verification and CI
+invoke `npm run verify`: application graph/chart tests, the cached native Maven reactor,
+frontend build/typecheck, and Helm lint. Native Nx caching remains in use; verification
+covers the full app without a custom publication-history baseline. Browser/API/Kafka
+business tests require a running app and are separate from source verification.
 
-Records belong to repository/run/attempt/source/event. Stale/malformed records are
-ignored with diagnostics. `report.mjs summary --github-summary` is the only summary
-write route; the explicit flag remains mandatory. Tests isolate inherited GitHub/Nx
-context and use temporary output/summary files. Keep the summary-leak regression tests.
-Run artifacts include the machine report, Markdown, native build metadata, handoff and
-individual results. Failure diagnostics have bounded retention; durable evidence remains
-with registry signatures/attestations and retained Release assets.
+`make verify` builds the shared Java/Node/Helm toolchain directly from the pinned pipeline
+commit in Compose. It mounts this source read-only and verifies a writable container copy.
+It does not require app-owned fetch scripts or pipeline dependencies. Update the workflow
+and Compose pipeline refs together when adopting a new reviewed platform version.
 
-## Build, selection and caches
+## Delivery ownership
 
-Nx retains affected Java/frontend/contract selection. Selected Java work invokes one
-cached native Maven reactor task; npm build/typecheck targets remain affected. The full
-native reference and container build proofs exercise the same private checkout sources.
-Dockerfiles exclude host outputs and use pinned Maven/Node/runtime bases. Bake owns
-the complete publishable application group; Helm owns runtime workloads. The bounded
-candidate adapter binds native digests and verifies rendered image completeness.
+The shared workflow discovers Bake's complete `application` group, builds source containers
+without pushing on PRs, and publishes all images on a main push after verification. It
+binds exact native output digests into `charts/fieldsignal`, verifies rendered completeness,
+vendors the local chart dependency and publishes the immutable candidate with evidence.
+There is no hand-maintained workflow service matrix or internal library publication.
 
-Caches are explicit and independent:
+Helpers are checked out under ignored `.work/delivery` at the reusable workflow's own
+commit, not from the app or platform main. Shared dependencies install there independently.
+The app caller grants a permission ceiling; each platform job narrows permissions. No
+`secrets: inherit` or extra write token is passed.
 
-- setup-node caches public npm downloads; setup-java caches Maven downloads.
-- Actions cache persists `.nx/cache` with distinct validation matrix scopes so
-  producers cannot race to save one incomplete shared cache key. Native task input hashes include source, native
-  manifests/locks, toolchain config and shared Nx/workflow inputs. Java and frontend
-  outputs are declared and tested for restoration after deletion.
-- Protected-main Bake imports/exports Actions BuildKit caches with one scope per native
-  target. PR builds only import trusted base-branch caches and never export compilation
-  caches to main. GitHub cache ref scoping also isolates PR Nx/download cache writes.
+The implementation retains current signing, SBOM, Release-retention and human-reporting
+behavior for migration compatibility. Its generic regression suite is maintained centrally.
+Source CI ends at **published, QA pending, certification pending**. Partial image/chart
+uploads and missing evidence cannot establish a complete handoff. Run-attempt identities
+and summary-write isolation remain enforced by platform tests.
 
-Cache eviction is a performance event: empty caches fall back to native downloads and
-builds. Whole source context copying is conservative; unrelated application inputs can
-invalidate layers. There is no custom graph, image carry-forward or reuse engine. Initial
-local measurements and invalidation tests appear in the checkpoint. Local task/layer
-reuse is demonstrated; GitHub cross-run persistence must still be observed after review.
-Do not equate npm downloads with compiled-output or Docker caches.
+## Deployment integration and activation
 
-## Publication and handoff
+See [shared pipeline migration](shared-pipeline-migration.md) for the exact pin, changed
+check names, QA-hook paths, and signer trust changes. Moving attestation generation into
+a reusable workflow changes signer identity; the caller source repo/ref/SHA remain separate
+verification requirements. Deployment consumers must migrate these checks deliberately.
+Existing exported actions remain usable at their historical source commits.
 
-Main builds every native application image for linux/amd64 with BuildKit provenance/SBOM.
-Image signing/provenance/SBOM must succeed for every output. Candidate assembly verifies
-trusted image source/ref/workflow and exact source digest, generates image values, vendors
-the pinned chart dependency, records builder/material/tool/run/attempt inputs and packages
-Helm with a CI-assigned version. No user image matrix or manual candidate directory exists.
-`candidate-handoff` contains an exact OCI reference and build identities, never a latest tag.
-
-App declarations live in Docker/Bake, Maven/npm, Nx and Helm. The current reference chart
-is `charts/fieldsignal`; this app-specific path is an adoption setting, not a second component
-catalog. Candidate/image registry paths derive from the source repository. The chart name,
-QA hooks and native declarations remain application-owned. Second-app build/runtime adapter
-proofs are in `tests/fixtures/tide-app` and `tide-web`; protected governance portability remains
-an acceptance gate, not a claim established by the older graph-only fixture.
-
-## Deployment integration
-
-The companion consumes trusted source-CI signatures and exact build/image evidence, pulls
-the same candidate, validates its own packaged environment schema, and checks out tests at
-the verified source revision. QA runs disposable kind with observed image/config checks
-before/after browser/API/Kafka tests and always deletes its cluster. Certification has a
-different trusted workflow identity, current policy/expiry/revocation checks and fresh Grype
-high/critical scanning. Source CI cannot supply an accepted certification signature.
-
-Production proposals pin a reviewed existing config commit, reject alternate Helm override
-routes, verify current certification, and render that exact pairing. No active environment
-Applications or shared production observer were provisioned by this migration. See the
-[operator runbook](operator-runbook.md) and checkpoint before enabling capabilities.
-
-## Human-readable run summary
-
-The report starts with **What happened**: code validation, Docker builds, candidate
-publication and the explicit absence of deployment/QA/certification in source CI. PR
-Docker builds exercise all native application targets from source using cache-only
-outputs; they do not push images or produce runnable image downloads. Their check and
-job log are listed alongside Java/frontend/regression checks. A successful job with no
-affected source work is identified as such. Main reports observed publication separately
-from validation, including failed or skipped publishers; validation success alone is not
-candidate success.
-
-**Downloads and evidence** links the current attempt's Actions artifacts, including logs,
-test reports, native metadata, Docker build records, candidate handoff and this report.
-Individual result-record downloads and selection/comparison details are collapsed.
-Observed publications link their registry package pages and evidence Releases, with
-direct links to available Release assets. Unrelated historical Releases are not listed.
-Missing inventories and expired/earlier-attempt artifacts never become publication claims.
-
-The final summary is written after the report artifact is uploaded so it can link to its
-own download. The downloaded report is the pre-upload rendering and links to the run's
-artifact browser. Summary writes still require `--github-summary`; preview/test runs do
-not write runner summaries.
+The companion owns candidate consumption, QA/certification policy, immutable environment
+configuration, promotion and production health. None of those capabilities is activated
+merely by extracting CI. See [release protocol](release-protocol.md) and
+[operator recovery](operator-runbook.md).

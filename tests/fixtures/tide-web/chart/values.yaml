@@ -1,3 +1,0 @@
-application:
-  workloads:
-    status: { image: BUILD_OUTPUT }

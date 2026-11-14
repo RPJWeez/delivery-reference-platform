@@ -8,6 +8,10 @@ Install Git and a supported Docker Desktop/Compose v2 toolchain. Make is optiona
 | Verify source/tests                  | `make verify` | `docker compose run --build --rm verify` |
 | Stop local processes, retain data    | `make stop`   | `docker compose stop`                    |
 
+Local container verification uses the shared pipeline toolchain at the exact Compose pin.
+The same `npm run verify` hook runs in CI; app repositories carry no pipeline scripts.
+It covers source/build/type/chart checks; runtime business tests remain separate.
+
 Station console: http://127.0.0.1:5173; operator console: http://127.0.0.1:5174.
 APIs: ports 8081/8082. PostgreSQL: 55432; Kafka: 9092. Fixtures and credentials
 are local synthetic data. Volumes persist when services stop. Removing volumes is a
@@ -16,7 +20,7 @@ After source changes, rerun `docker compose up --build -d`. Compose builds sourc
 including private libraries; it never needs published application-private packages.
 
 With Java 21, Node 22.22.0 and Helm 3.18.4 installed, IDE/native loops remain available:
-`npm ci`, `./mvnw verify`, `npx nx run fieldsignal:java-verify`,
+`npm ci`, `npm run verify`, `./mvnw verify`, `npx nx run fieldsignal:java-verify`,
 `npx nx affected -t build typecheck`, and `npm run test:workspace`.
 The Maven wrapper's pinned ZIP requires unzip; slim containers use the pinned Maven
 builder directly. `make smoke` requires the running local APIs/Kafka; Playwright tests

@@ -1,11 +1,24 @@
 # GitHub setup
 
-Source repository: RPJWeez/delivery-reference-platform. Deployment repository: RPJWeez/fieldsignal-deploy. Keep both public for the free-tier demonstration.
+The source repository is `RPJWeez/delivery-reference-platform`; shared delivery code lives
+in `RPJWeez/pipelines`; environment policy/configuration lives in `RPJWeez/fieldsignal-deploy`.
+The app workflow and Compose toolchain pin the same reviewed pipeline commit.
 
-Main requires a PR and the GitHub Actions ci check, with zero required approvals for a solo maintainer. Block deletion/force pushes, and use no routine bypass. Apply equivalent protection to the deployment repository after its initial ci workflow is registered. Genuine multi-person approval needs another reviewer; the author cannot approve their own PR.
+Main should require a PR and the observed reusable validation check, with no routine
+bypass or force pushes. Check names change when jobs become nested under `delivery`;
+follow [migration notes](shared-pipeline-migration.md) before updating required contexts.
+A solo maintainer cannot supply independent review merely by assigning themselves.
 
-Public package visibility is separate from source visibility. Make GHCR charts/images and the npm package public after initial creation; Maven packages inherit repository access. Do not configure paid runner sizes or Nx Cloud. Verify account billing stop-usage controls separately; this repository does not change billing settings.
+Public source/package visibility and cross-repository access are separate settings. This
+reference uses public pipeline code and GHCR artifacts. Existing private-library packages
+are historical; new private libraries build from checkout without registry credentials.
+No paid runners or Nx Cloud are required by these declarations.
 
-Publication jobs run only on protected main. PR jobs are unprivileged. Workflows use scoped GITHUB_TOKEN/OIDC rather than stored publishing credentials. Maven local package reads may need a read-only package token outside CI.
+Publication runs only for a main push after validation. The caller grants explicit token
+permissions and individual shared jobs narrow them. No inherited secrets or additional
+publishing credential is passed. The shared workflow uses scoped GITHUB_TOKEN/OIDC.
 
-The deployment pipeline verifies the candidate's signed artifact evidence and successful qualification before promotion. Existing production pin updates are reviewed Git changes; publication never updates them automatically. A local kind/Argo installation supplies the demonstration runtime; persistent cloud and Apigee targets remain optional decisions.
+Before accepting candidates downstream, migrate exact reusable-workflow signer trust
+while preserving caller repository/ref/source checks. QA/certification and production
+health remain separate capabilities. This migration does not change live permissions,
+protection settings, package visibility, or production desired state.

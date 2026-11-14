@@ -19,8 +19,6 @@
       "{workspaceRoot}/.mvn/**/*",
       "{workspaceRoot}/.github/workflows/**/*",
       "{workspaceRoot}/.dockerignore",
-      "{workspaceRoot}/.github/actions/**/*",
-      "{workspaceRoot}/tools/pipeline/**/*",
       "{workspaceRoot}/docker-bake.hcl",
       "{workspaceRoot}/pom.xml",
       "{workspaceRoot}/package.json"

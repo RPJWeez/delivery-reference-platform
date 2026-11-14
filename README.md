@@ -25,10 +25,15 @@ flowchart LR
   Promote --> Argo[GitOps sync and observed health]
 ```
 
-Maven/npm own native builds; Nx retains selection, orchestration and caches. Private
+The app calls [shared delivery workflows](https://github.com/RPJWeez/pipelines/tree/codex/extract-application-delivery)
+through a small pinned YAML caller. Pipeline scripts/tests/toolchains live there; this repo
+owns native builds, runtime declarations and business tests. See the
+[migration and activation notes](docs/shared-pipeline-migration.md).
+
+Maven/npm own native builds; Nx retains graph analysis, orchestration and caches. Private
 libraries build from the same checkout without registry access or release/adoption-pin
 bookkeeping. Bake supplies native image metadata; Helm supplies runtime declarations.
-A small adapter checks image completeness. CI builds every application image and packages
+A shared adapter checks image completeness. CI builds every application image and packages
 the app-owned chart with exact digests, vendored dependencies, schema and build identities.
 Chart versions are assigned by run/attempt. CI does not deploy or claim runtime qualification.
 

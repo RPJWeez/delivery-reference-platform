@@ -19,4 +19,4 @@ trap 'kill "$station_pid" "$operator_pid" "$ingestion_pid" "$incident_pid" 2>/de
 curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15173/healthz
 curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:15174/healthz
 npm run test:functional
-python3 tools/smoke.py
+python3 tests/smoke.py

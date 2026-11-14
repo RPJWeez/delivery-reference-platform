@@ -1,7 +1,0 @@
-{
-  "javaVersion": "21",
-  "nodeVersion": "22.22.0",
-  "npmRegistry": "https://registry.npmjs.org",
-  "chartRegistryPath": "charts",
-  "imagePlatforms": "linux/amd64"
-}
