@@ -206,8 +206,7 @@ if (command === "record") {
   const candidate =
     !isPR && records.find((record) => record.kind === "candidate");
   let artifacts = [],
-    releases = [],
-    ownerType;
+    releases = [];
   try {
     const index = JSON.parse(fs.readFileSync(".work/artifacts.json"));
     if (
@@ -216,7 +215,6 @@ if (command === "record") {
       !Number.isFinite(Date.parse(index.startedAt))
     )
       throw Error("wrong artifact index");
-    ownerType = index.ownerType;
     artifacts = index.artifacts.filter(
       (artifact) =>
         !artifact.expired &&
@@ -255,7 +253,7 @@ if (command === "record") {
       reference,
     );
     return match
-      ? `https://github.com/${ownerType === "Organization" ? "orgs" : "users"}/${match[1]}/packages/container/${encodeURIComponent(match[2])}`
+      ? `https://github.com/${run.repository}/pkgs/container/${encodeURIComponent(match[2])}`
       : /^https:\/\//.test(reference)
         ? reference
         : null;
