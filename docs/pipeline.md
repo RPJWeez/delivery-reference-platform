@@ -80,3 +80,9 @@ GitHub summary. Logs, Docker build records, test reports and attestations remain
 
 Successful image builds/pushes do not establish a complete candidate when chart publication
 fails. Source CI never claims runtime QA, certification, or application deployment.
+
+Initial hosted acceptance: [run 43653169063](https://github.com/RPJWeez/delivery-reference-platform/actions/runs/43653169063)
+passed nine separately named project-check jobs and four image-build jobs. Its run page
+was inspected and contained exactly one consolidated job-summary box. The shared tests
+also cover failed discovery, cancelled/failed matrix jobs, native commands without Nx,
+and missing/duplicate/inconsistent image metadata.

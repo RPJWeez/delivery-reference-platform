@@ -16,6 +16,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: RPJWeez/pipelines/.github/workflows/application.yml@9a16076f95de084d6a394d619a658123b7f0b8e0
+    uses: RPJWeez/pipelines/.github/workflows/application.yml@346090e9c7097f9b1423228fcbc7153641d6f728
     with:
       chart: charts/fieldsignal
