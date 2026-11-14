@@ -2,8 +2,9 @@
 
 1. A contributor changes code/tests/native manifests and runs `make verify`. Private
    libraries require no release-version or adoption-pin edits.
-2. PR checks retain affected Nx validation, native reactor verification when Java is
-   affected, full source-container proof, reporting regressions and Helm checks.
+2. The pinned shared workflow runs the app-native `npm run verify` hook and full
+   source-container proof. Native caches preserve build reuse; pipeline regressions live
+   in the shared project. See [pipeline migration](shared-pipeline-migration.md).
 3. Protected main builds the complete Bake application group using explicit caches.
    It publishes exact image outputs and required evidence. Partial uploads remain
    failed/incomplete; they do not produce a complete-candidate handoff.
