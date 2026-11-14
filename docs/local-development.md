@@ -9,7 +9,8 @@ Install Git and a supported Docker Desktop/Compose v2 toolchain. Make is optiona
 | Stop local processes, retain data    | `make stop`   | `docker compose stop`                    |
 
 Local container verification uses the shared pipeline toolchain at the exact Compose pin.
-The same `npm run verify` hook runs in CI; app repositories carry no pipeline scripts.
+CI exposes the corresponding native checks as separately named per-project jobs;
+app repositories carry no generic pipeline scripts.
 It covers source/build/type/chart checks; runtime business tests remain separate.
 
 Station console: http://127.0.0.1:5173; operator console: http://127.0.0.1:5174.

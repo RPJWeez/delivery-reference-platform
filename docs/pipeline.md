@@ -8,16 +8,32 @@ portability fixtures, and the verification toolchain live in the pipeline reposi
 
 ## Developer workflow
 
-Use `make dev`, `make verify`, and `make stop`. Both local container verification and CI
-invoke `npm run verify`: application graph/chart tests, the cached native Maven reactor,
-frontend build/typecheck, and Helm lint. Native Nx caching remains in use; verification
-covers the full app without a custom publication-history baseline. Browser/API/Kafka
-business tests require a running app and are separate from source verification.
+Use `make dev`, `make verify`, and `make stop`. Local `make verify` retains the convenient
+full-application `npm run verify` command. Hosted CI exposes the native work as separate jobs:
 
-`make verify` builds the shared Java/Node/Helm toolchain directly from the pinned pipeline
-commit in Compose. It mounts this source read-only and verifies a writable container copy.
-It does not require app-owned fetch scripts or pipeline dependencies. Update the workflow
-and Compose pipeline refs together when adopting a new reviewed platform version.
+- `Build/Test - <Java project>` runs native Maven verification for that module and its
+  required private source dependencies.
+- `Build - <library>` and `Build/Typecheck - <frontend>` run declared native Nx targets.
+- `Test - Workspace and dependency graph` runs the root native `ci` target.
+- `Lint - application-chart` checks the shared chart templates.
+- `Build Image - <target>` verifies a selected PR image; main uses
+  `Build & Publish Image - <target>` for every application image.
+
+PRs select changed projects and consumers through the native Nx graph. Repo-wide checks
+always run, and ambiguous image ownership builds conservatively. Main checks every native
+project and publishes a complete image closure; it does not mix in historical image outputs.
+New projects need native targets/dependency edges, image/runtime declarations, and tests.
+There is no service list in the app caller or shared workflow. A `ci` target is the native
+extension point for additional per-project checks; repositories without Nx can declare
+named native commands through the shared workflow's `project-checks` input.
+
+Each matrix job has its own source checkout and cache producer scope. Maven jobs build
+needed source dependencies with `-am`, so dependency compilation/tests may repeat across
+jobs without private package publication. Native task caching remains available for Nx
+jobs. Browser/API/Kafka tests remain separate runtime QA checks.
+
+The Compose verification toolchain and CI caller pin the same reviewed pipeline commit.
+Update both pins together when upgrading. The app carries no generic pipeline scripts.
 
 ## Delivery ownership
 
@@ -50,3 +66,23 @@ The companion owns candidate consumption, QA/certification policy, immutable env
 configuration, promotion and production health. None of those capabilities is activated
 merely by extracting CI. See [release protocol](release-protocol.md) and
 [operator recovery](operator-runbook.md).
+
+## Reading the run summary
+
+There is one `Application delivery summary` box. It lists each project's work/result,
+images built or omitted as unaffected, failure-step/log links, image evidence, candidate
+publication state, and downloads. Native commands and bounded test/build/cache output
+are expandable inside that same report.
+
+Third-party Docker and attestation summaries are disabled. Non-report steps and native
+child commands redirect job-summary writes; only the final report explicitly writes the
+GitHub summary. Logs, Docker build records, test reports and attestations remain available.
+
+Successful image builds/pushes do not establish a complete candidate when chart publication
+fails. Source CI never claims runtime QA, certification, or application deployment.
+
+Initial hosted acceptance: [run 43653169063](https://github.com/RPJWeez/delivery-reference-platform/actions/runs/43653169063)
+passed nine separately named project-check jobs and four image-build jobs. Its run page
+was inspected and contained exactly one consolidated job-summary box. The shared tests
+also cover failed discovery, cancelled/failed matrix jobs, native commands without Nx,
+and missing/duplicate/inconsistent image metadata.

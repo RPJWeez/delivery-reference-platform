@@ -23,6 +23,16 @@
       "options": {
         "command": "./mvnw -B -ntp verify"
       }
+    },
+    "ci": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "metadata": {
+        "description": "Test - Workspace and dependency graph"
+      },
+      "options": {
+        "command": "npm run test:workspace"
+      }
     }
   }
 }
