@@ -26,7 +26,7 @@ own commit and dependencies, under excluded `.work/delivery`.
    runner fixture test. Branch-only commits must remain reachable; merge without losing
    the pinned commit, or update both pins to the reviewed retained commit.
 2. Review the app migration and observe the reusable workflow against an app PR. The
-   caller is 22 lines. No service-specific workflow scripts remain.
+   caller is 21 lines. No service-specific workflow scripts remain.
 3. Inspect required-check settings. The old `Validation complete` job is now nested under
    `delivery`; confirm the actual check context before replacing protection requirements.
    Do not remove required validation while introducing the new context.
@@ -59,9 +59,11 @@ until its reviewed trust migration is complete.
 - Compose successfully built the toolchain from an exact published pipeline Git commit.
 - Full application verification passed in the shared runner: 7 workspace checks, native
   Java reactor verification, all frontend build/typecheck targets, and Helm lint.
-- The app reusable caller still needs a GitHub PR run. Connector PR creation returned
-  HTTP 403; automatic approval review rejected a browser fallback. Comparison links
-  are supplied for review. No candidate publication or runtime QA is claimed.
+- Draft reviews are open: [pipelines #1](https://github.com/RPJWeez/pipelines/pull/1)
+  and [application #16](https://github.com/RPJWeez/delivery-reference-platform/pull/16).
+  Platform PR CI passed. The app run loaded the exact shared workflow and passed planning;
+  final verification results are available on its PR checks. No candidate publication or
+  runtime QA is claimed.
 
 Actionlint 1.7.12 requires narrowly ignoring its unknown `job.workflow_*` properties for
 GitHub.com's newer exact-self-checkout contexts. Other workflow diagnostics remain enabled.
