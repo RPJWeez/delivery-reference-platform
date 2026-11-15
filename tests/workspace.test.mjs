@@ -25,6 +25,16 @@ function affected(file, target) {
   ).sort();
 }
 
+test("station console source edits do not select Java projects through the Maven parent", () => {
+  assert.deepEqual(affected("apps/station-console/src/main.tsx", "container"), [
+    "@fieldsignal/station-console",
+  ]);
+  assert.deepEqual(
+    affected("apps/station-console/src/main.tsx", "mvn-verify"),
+    [],
+  );
+});
+
 test("Java source edits select one service through the inferred Maven graph", () => {
   assert.deepEqual(
     affected(

@@ -3,18 +3,14 @@
   "targets": {
     "java-verify": {
       "executor": "nx:run-commands",
-      "cache": true,
+      "cache": false,
       "inputs": [
-        "{workspaceRoot}/pom.xml",
-        "{workspaceRoot}/.mvn/**/*",
-        "{workspaceRoot}/mvnw",
-        "{workspaceRoot}/apps/*/pom.xml",
-        "{workspaceRoot}/apps/*/src/**/*",
-        "{workspaceRoot}/libraries/*/pom.xml",
-        "{workspaceRoot}/libraries/*/src/**/*",
-        "{workspaceRoot}/nx.json",
-        "{workspaceRoot}/.github/workflows/ci.yml",
-        "{workspaceRoot}/compose.yaml"
+        "{projectRoot}/pom.xml",
+        "{projectRoot}/.mvn/**/*",
+        "{projectRoot}/mvnw",
+        "{projectRoot}/nx.json",
+        "{projectRoot}/.github/workflows/ci.yml",
+        "{projectRoot}/compose.yaml"
       ],
       "outputs": [
         "{workspaceRoot}/apps/*/target",

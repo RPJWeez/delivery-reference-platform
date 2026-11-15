@@ -1,35 +1,17 @@
-# Application release protocol
+# Releasing FieldSignal
 
-1. A contributor changes code/tests/native manifests and runs `make verify`. Private
-   libraries require no release-version or adoption-pin edits.
-2. The pinned shared workflow discovers separately named per-project native checks
-   and affected image-build jobs on PRs. Main checks every native project and publishes
-   the complete image inventory. Pipeline regressions live in the shared project; the
-   app caller contains no service matrix. See [pipeline operation](pipeline.md).
-3. Protected main builds the complete Bake application group using explicit caches.
-   It publishes exact image outputs and required evidence. Partial uploads remain
-   failed/incomplete; they do not produce a complete-candidate handoff.
-4. CI binds verified image digests to the app-owned Helm chart, vendors its pinned local
-   dependency, assigns a run/attempt package version and signs the candidate. It records
-   source, workflow, native builder/material metadata and toolchain inputs. CI ends at
-   **published; QA pending**. It does not deploy or certify.
-5. In fieldsignal-deploy, QA accepts the digest-addressed candidate handoff, verifies
-   trusted source/workflow/revision and all images, checks candidate-specific config
-   schema, then runs disposable kind/Argo/functional tests. It records observed identity
-   before/after tests. No rebuild or image substitutions occur.
-6. A separately protected certification workflow verifies build and signed QA evidence,
-   current policy, expiry/revocation and fresh high-or-critical vulnerability scanning.
-   It signs eligibility against the original registry digest; it does not copy artifacts.
-7. A reviewed promotion selects that digest and an existing reviewed configuration
-   commit. Configuration must be committed first; the pointer cannot name itself.
-   Production verifies current certification and the exact proposed pairing.
-8. GitOps reconciles desired state. Observed sync/health is a separate required state;
-   serialization must continue through health confirmation. The shared production
-   observer/merge interlock still requires an actual selected runtime integration.
-9. Recovery selects a compatible retained pair, rechecking current eligibility and data/
-   contract compatibility. An expired/revoked candidate cannot bypass current policy.
+1. Validate changes in a branch/PR. A dev package can be produced for separate dev CD.
+2. Merge the application changes to main. This validates source without publishing.
+3. Manually create a release candidate, or compose one using existing component images.
+4. Deploy and test that exact candidate through the existing QA/CD process. Check API and
+   event contracts, database migrations, browser behavior and the selected configuration.
+   An older component is not assumed compatible merely because its image is available.
+5. Review the QA result and promote the candidate with its QA run URL and release name.
+   Promotion records a normal GitHub Release without changing image or chart contents.
+6. Separate CD deploys the release with reviewed environment configuration and verifies
+   the observed image versions and rollout health.
 
-Prepared workflows are not executed capability. Local checks are recorded in the
-[checkpoint](application-golden-path-checkpoint.md). Source-main publication and the
-cross-repository protected path require review/merge and package access configuration;
-these actions were not authorized or executed during implementation.
+For recovery, select a retained compatible release and configuration. Recheck database,
+API and event compatibility: rolling back artifacts does not reverse data or external
+messages. Never rebuild an old release or silently substitute its component images.
+See [application workflows](pipeline.md) for the Actions inputs.
