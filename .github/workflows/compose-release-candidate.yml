@@ -18,7 +18,7 @@ permissions:
   contents: read
 jobs:
   package:
-    uses: RPJWeez/pipelines/.github/workflows/package.yml@fab00a3f053d92a228c21744012720643cb5a751
+    uses: RPJWeez/pipelines/.github/workflows/package.yml@f5a1930ea42b457df9120723ad650ca43eedd629
     permissions:
       contents: read
       actions: read

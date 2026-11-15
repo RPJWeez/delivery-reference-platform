@@ -20,7 +20,10 @@ station-console edits do not mark the Maven parent and all Java projects affecte
 Native build/test/typecheck jobs and source-container proofs have read-only permissions,
 no registry login and no image publication. New validation and package workflows disable
 shared build/task caches until safe cross-trust acceleration is demonstrated. Local
-`make verify` remains the full native verification command.
+`make verify` remains the full native verification command. Its root Java reactor task
+is intentionally uncached: parent-owned file inputs exclude nested projects, so caching
+that convenience task could miss module edits. Native Maven still handles incremental
+compilation; hosted verification uses separate native module jobs.
 
 ## Manual artifact production
 

@@ -26,7 +26,7 @@
   "policy": {
     "environment": "delivery-release",
     "pipelineRepository": "RPJWeez/pipelines",
-    "trustedPipelineRevisions": ["fab00a3f053d92a228c21744012720643cb5a751"],
+    "trustedPipelineRevisions": ["f5a1930ea42b457df9120723ad650ca43eedd629"],
     "certification": {
       "repository": "RPJWeez/fieldsignal-deploy",
       "workflow": "RPJWeez/fieldsignal-deploy/.github/workflows/certify.yml",

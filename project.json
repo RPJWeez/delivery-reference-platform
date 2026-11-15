@@ -3,15 +3,11 @@
   "targets": {
     "java-verify": {
       "executor": "nx:run-commands",
-      "cache": true,
+      "cache": false,
       "inputs": [
         "{projectRoot}/pom.xml",
         "{projectRoot}/.mvn/**/*",
         "{projectRoot}/mvnw",
-        "{projectRoot}/apps/*/pom.xml",
-        "{projectRoot}/apps/*/src/**/*",
-        "{projectRoot}/libraries/*/pom.xml",
-        "{projectRoot}/libraries/*/src/**/*",
         "{projectRoot}/nx.json",
         "{projectRoot}/.github/workflows/ci.yml",
         "{projectRoot}/compose.yaml"
