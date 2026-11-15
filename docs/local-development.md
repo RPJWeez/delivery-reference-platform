@@ -8,7 +8,7 @@ Install Git and a supported Docker Desktop/Compose v2 toolchain. Make is optiona
 | Verify source/tests                  | `make verify` | `docker compose run --build --rm verify` |
 | Stop local processes, retain data    | `make stop`   | `docker compose stop`                    |
 
-Local container verification uses the shared pipeline toolchain at the exact Compose pin.
+Local container verification uses the platform-maintained `v1` toolchain.
 CI exposes the corresponding native checks as separately named per-project jobs;
 app repositories carry no generic pipeline scripts.
 It covers source/build/type/chart checks; runtime business tests remain separate.
@@ -25,8 +25,8 @@ With Java 21, Node 22.22.0 and Helm 3.18.4 installed, IDE/native loops remain av
 `npx nx affected -t build typecheck`, and `npm run test:workspace`.
 The Maven wrapper's pinned ZIP requires unzip; slim containers use the pinned Maven
 builder directly. `make smoke` requires the running local APIs/Kafka; Playwright tests
-also require Chromium (`npx playwright install chromium`). These are business tests,
-not certification of a subsequently built registry candidate.
+also require Chromium (`npx playwright install chromium`). Published release candidates
+go through separate QA using their exact image and chart digests.
 
 Change a private library and its callers together. Java modules inherit the fixed reactor
 version and use `${project.version}`; Maven Enforcer rejects reactor pin drift. npm
