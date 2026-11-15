@@ -1,7 +1,4 @@
-# Historical shared pipeline extraction
-
-This document records the earlier extraction. Current callers and activation gates are in
-[pipeline operation](pipeline.md) and [implementation status](pipeline-topology-implementation.md).
+# Shared pipeline migration
 
 2026-11-14. This app consumes `RPJWeez/pipelines` rather than carrying a pipeline framework.
 The implementation is on `codex/extract-application-delivery`; the app migration is on

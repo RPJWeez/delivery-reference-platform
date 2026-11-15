@@ -1,48 +1,29 @@
 # Architecture
 
 FieldSignal is one releasable application per source repository. Java application-private
-modules compile in Maven's reactor; npm private workspaces link local source builds.
-There is no independent internal-package publication or adoption-version workflow.
-Previously published artifacts remain retained and untouched. The maintainer confirmed
-that these packages have no external consumers during the golden-path migration.
+modules compile in Maven's reactor; npm workspaces link private source libraries. There
+is no independent internal-library publication or version-adoption workflow.
 
-Maven/npm own compilation and dependencies. Nx remains responsible for affected
-selection, orchestration and task caching. Maven dependency inference remains pinned;
-local full verification uses one native reactor target; CI uses separately named native
-Maven module jobs, building source dependencies with `-am`. The experimental plugin's 113-task lifecycle
-execution achieved only 70 cache hits on an unchanged repeat and produced recursive
-terminal records. The native reactor task restores its declared outputs in one cache
-entry. See the checkpoint for measured verification and remaining acceptance gates.
+Maven/npm own compilation and dependency resolution. Nx selects affected projects and
+orchestrates native checks. CI verifies Java modules with their private source dependencies
+using Maven `-am`. The local whole-reactor verification task is uncached so nested module
+edits cannot be missed; native Maven still performs incremental compilation.
 
-A pinned reusable workflow in `RPJWeez/pipelines` owns delivery scripts, evidence,
-reporting, QA mechanics and verification toolchains. The app owns native build/runtime
-declarations and business tests. See [pipeline migration](shared-pipeline-migration.md).
-Source CI validates PRs and prepares complete immutable candidates on protected main.
-Dockerfiles consume source and run native tests/builds; host target/dist/node_modules
-are excluded. Bake's application group owns build outputs. The app-owned Helm chart
-owns runtime roles. A bounded adapter binds native output digests to Helm values and
-checks the rendered image closure. A candidate includes templates, pinned vendored
-chart dependencies, configuration schema and build identities; image bytes remain in
-separate registry objects. CI assigns chart versions from run/attempt, not contributor
-release bookkeeping. Source SHA alone is not build identity.
+Application repositories own source, native build manifests, Docker/Bake definitions,
+Helm templates, contracts and business tests. The shared pipeline owns execution,
+publication, provenance checks and release mechanics. It reads the existing declarations
+instead of requiring another application descriptor or service inventory.
 
-Separate deployment-repository QA uses the exact candidate digest in disposable kind
-with application-owned fixtures and tests from the verified source revision. Evidence
-records artifact/config/test/fixture/platform/attempt identities and observed runtime
-images. Protected certification verifies trusted build/QA evidence and current security
-policy, then signs eligibility against the same registry digest. Production selects an
-eligible candidate plus an existing reviewed configuration commit. The outer GitOps
-pointer may follow protected main; runtime configuration cannot move independently.
-All alternate Helm override routes are rejected.
+A package contains the complete Helm chart and exact image digest references. Image bytes
+remain in the registry. Dev packages come from selected branch commits; release candidates
+come from main. Composition can select existing images from older candidates and produces
+a new complete chart without rebuilding those images.
 
-These are prepared repository contracts. The migration has demonstrated local source
-builds, cache restoration/invalidation and Compose business tests. Signed source-main
-publication, cross-repository QA/certification and production health orchestration have
-not been demonstrated. Deployment examples remain inactive. Certification remains
-fail-closed until its protected capability is configured; no protections were changed.
+Separate CD deploys a selected immutable package. QA tests that exact combination of
+components and configuration. A release owner reviews the QA run and approves the candidate
+as a GitHub Release. Promotion preserves the candidate digest and does not deploy it.
+Shared workflow versions and artifact verification are maintained by the platform.
 
-Coherent desired state does not imply atomic rollout. Preserve API/event compatibility,
-expand/migrate/contract database changes and client deprecation windows. Rollback uses
-a retained compatible candidate/configuration pair and does not undo data or external
-events. Retain old images, packages, evidence and supported rollback closures; no registry
-cleanup or copying is part of this migration. See [operator recovery](operator-runbook.md).
+Runtime configuration is reviewed separately. Deployment must verify actual rollout health;
+a merge or successful publication is not runtime success. Recovery selects retained artifacts
+and configuration, and must account for database and event compatibility.

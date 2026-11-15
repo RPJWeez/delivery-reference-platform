@@ -18,47 +18,24 @@ optional. [Native IDE commands and contributor guide](docs/local-development.md)
 
 ```mermaid
 flowchart LR
-  Source[Branch / PR / main] --> Validate[Read-only validation]
-  Branch[Manual branch package] --> Dev[Immutable dev chart + images]
-  Main[Manual main candidate] --> RC[Immutable release candidate]
-  Compose[Manual composition] --> RC
-  RC --> QA[Separate QA and certification]
-  QA --> Promote[Manual candidate-to-release designation]
-  Promote --> CD[Separate environment promotion and CD]
+  Source[Branch / PR / main] --> Validate[Validation only]
+  Manual[Manual dev or release package] --> Package[Chart + exact image digests]
+  Package --> QA[Separate CD and QA]
+  QA --> Release[Manual release approval]
+  Release --> CD[Separate production CD]
 ```
 
-The app calls [shared delivery workflows](https://github.com/RPJWeez/pipelines/tree/codex/deliberate-delivery-topology)
-through thin pinned YAML callers. Pipeline scripts/tests/toolchains live there; this repo
-owns native builds, runtime declarations and business tests. See the
-[migration and activation notes](docs/shared-pipeline-migration.md).
+Run delivery operations through **Actions → Application CI → Run workflow**.
+[Workflow inputs](docs/pipeline.md) · [Release process](docs/release-protocol.md) ·
+[Recovery](docs/operator-runbook.md)
 
-Maven/npm own native builds; Nx retains graph analysis, orchestration and caches. Private
-libraries build from the same checkout without registry access or release/adoption-pin
-bookkeeping. Bake supplies native image metadata; Helm supplies runtime declarations.
-A shared adapter checks image completeness. Manual candidate creation builds every application image and packages
-the app-owned chart with exact digests, vendored dependencies, schema and build identities.
-Chart versions are assigned by run/attempt. Validation never publishes; package creation and release designation never deploy.
+The application keeps native builds, Bake images, Helm workloads and business tests.
+Shared execution and publication live in [RPJWeez/pipelines](https://github.com/RPJWeez/pipelines).
+One Actions entry point calls its maintained `v1` version. Build and runtime declarations
+stay with the application; delivery implementation stays with the platform.
 
-The [companion deployment repository](https://github.com/RPJWeez/fieldsignal-deploy)
-contains the legacy qualification/GitOps example. Adopting the new exact-candidate
-handoff, certification issuer and eligibility ledger remains a separate CD integration. Runtime config pins an existing reviewed commit; the outer GitOps pointer
-may follow protected main. Promotion/rollback never rebuilds or substitutes images.
+The [companion repository](https://github.com/RPJWeez/fieldsignal-deploy) contains the
+separate CD example. Packaging and release approval do not deploy the application.
 
-The earlier migration demonstrated local source builds, cache restoration/invalidation,
-real API/Kafka/browser behavior and second-application build/runtime adapters. Protected
-registry publication and cross-repository QA/certification remain integration gates.
-No shared/production deployment, live protection changes or artifact deletion occurred.
-Read the [implementation checkpoint](docs/application-golden-path-checkpoint.md) for exact
-executed checks and remaining work; prepared code is not a claim of live capability.
-
-See [pipeline implementation status](docs/pipeline-topology-implementation.md) for the new
-source workflow validation and activation gates.
-
-See [architecture](docs/architecture.md), [pipeline](docs/pipeline.md),
-[release protocol](docs/release-protocol.md) and [operator recovery](docs/operator-runbook.md).
-Retain historical artifacts and compatible rollback candidates. Desired state is coherent,
-not an atomic runtime cutover; rollback does not reverse data or external events.
-
-This reference uses public GitHub/GHCR, standard hosted runners and disposable local/kind
-infrastructure. No permanent cloud resources or paid platform were created. The repository
-has not been assigned an open-source license.
+This reference uses public GitHub/GHCR and disposable local/kind infrastructure.
+The repository has not been assigned an open-source license.

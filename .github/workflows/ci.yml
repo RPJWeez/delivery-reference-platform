@@ -5,19 +5,58 @@ on:
       - "**"
   pull_request: {}
   merge_group: {}
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        description: Delivery operation
+        required: true
+        options:
+          - dev
+          - candidate
+          - compose
+          - promote
+      source-ref:
+        type: string
+        description: "Dev only: branch to package"
+      candidate:
+        type: string
+        description: "Compose/promote only: candidate digest reference"
+      overrides:
+        type: string
+        default: "{}"
+        description: "Compose only: JSON component to candidate reference map"
+      reason:
+        type: string
+        description: "Compose only: reason for selecting this combination"
+      release-id:
+        type: string
+        description: "Promote only: release name, e.g. v1.2.3"
+      qa-run:
+        type: string
+        description: "Promote only: successful QA run URL you reviewed"
 permissions:
   contents: read
-concurrency:
-  group: validation-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
   delivery:
-    uses: RPJWeez/pipelines/.github/workflows/validate.yml@f5a1930ea42b457df9120723ad650ca43eedd629
+    if: github.event_name != 'workflow_dispatch'
+    uses: RPJWeez/pipelines/.github/workflows/validate.yml@v1
     permissions:
       contents: read
       actions: read
       pull-requests: read
+    concurrency:
+      group: validation-${{ github.ref }}
+      cancel-in-progress: true
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    uses: RPJWeez/pipelines/.github/workflows/delivery.yml@v1
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+      packages: write
+      id-token: write
+      attestations: write
     with:
-      deduplicate: true
-      chart: charts/fieldsignal
-      project-checks: "[]"
+      request: ${{ toJSON(inputs) }}
