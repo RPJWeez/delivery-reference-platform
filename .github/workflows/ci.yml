@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   delivery:
-    uses: RPJWeez/pipelines/.github/workflows/validate.yml@codex/separate-pipelines
+    uses: RPJWeez/pipelines/.github/workflows/validate.yml@v1
     permissions:
       contents: read
       actions: read
