@@ -25,13 +25,15 @@ flowchart LR
   Release --> CD[Separate production CD]
 ```
 
-Run delivery operations through **Actions → Application CI → Run workflow**.
+Actions lists validation, dev packaging, candidate creation, composition and release
+promotion as separate workflows. Select the operation you need and use **Run workflow**
+for the manual pipelines.
 [Workflow inputs](docs/pipeline.md) · [Release process](docs/release-protocol.md) ·
 [Recovery](docs/operator-runbook.md)
 
 The application keeps native builds, Bake images, Helm workloads and business tests.
 Shared execution and publication live in [RPJWeez/pipelines](https://github.com/RPJWeez/pipelines).
-One Actions entry point calls its maintained `v1` version. Build and runtime declarations
+Small Actions entry points call its maintained `v1` version. Build and runtime declarations
 stay with the application; delivery implementation stays with the platform.
 
 The [companion repository](https://github.com/RPJWeez/fieldsignal-deploy) contains the

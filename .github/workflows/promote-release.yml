@@ -1,0 +1,32 @@
+name: Promote release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        type: string
+        description: Candidate digest reference
+        required: true
+      release-id:
+        type: string
+        description: Release name, e.g. v1.2.3
+        required: true
+      qa-run:
+        type: string
+        description: Successful QA run URL reviewed for this candidate
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    uses: RPJWeez/pipelines/.github/workflows/promote.yml@v1
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      candidate: ${{ inputs.candidate }}
+      release-id: ${{ inputs.release-id }}
+      qa-run: ${{ inputs.qa-run }}

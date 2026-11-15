@@ -1,0 +1,32 @@
+name: Compose release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        type: string
+        description: Baseline candidate digest reference
+        required: true
+      overrides:
+        type: string
+        description: JSON component to candidate reference map
+        default: "{}"
+      reason:
+        type: string
+        description: Reason for this component selection
+        required: true
+permissions:
+  contents: read
+jobs:
+  run:
+    uses: RPJWeez/pipelines/.github/workflows/compose-candidate.yml@v1
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      candidate: ${{ inputs.candidate }}
+      overrides: ${{ inputs.overrides }}
+      reason: ${{ inputs.reason }}
