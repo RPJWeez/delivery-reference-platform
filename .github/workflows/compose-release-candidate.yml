@@ -1,0 +1,33 @@
+name: Compose release candidate
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Immutable baseline candidate reference
+        required: true
+        type: string
+      overrides:
+        description: JSON component to candidate reference mapping
+        default: "{}"
+        type: string
+      reason:
+        description: Why this component combination is needed
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  package:
+    uses: RPJWeez/pipelines/.github/workflows/package.yml@bb4d1a5dc918d897bba812c146aec9ec29e9817f
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      operation: compose
+      candidate: ${{ inputs.candidate }}
+      overrides: ${{ inputs.overrides }}
+      reason: ${{ inputs.reason }}

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "application": "fieldsignal",
+  "releaseBranch": "main",
+  "chart": "charts/fieldsignal",
+  "chartName": "fieldsignal",
+  "configCompatibility": "fieldsignal-config-v1",
+  "components": {
+    "ingestion-service": {
+      "compatibility": "fieldsignal-v1",
+      "workloads": [
+        "ingestion-service"
+      ]
+    },
+    "incident-service": {
+      "compatibility": "fieldsignal-v1",
+      "workloads": [
+        "incident-service"
+      ]
+    },
+    "station-console": {
+      "compatibility": "fieldsignal-v1",
+      "workloads": [
+        "station-console"
+      ]
+    },
+    "operator-console": {
+      "compatibility": "fieldsignal-v1",
+      "workloads": [
+        "operator-console"
+      ]
+    }
+  },
+  "policy": {
+    "environment": "delivery-release",
+    "pipelineRepository": "RPJWeez/pipelines",
+    "trustedPipelineRevisions": [
+      "bb4d1a5dc918d897bba812c146aec9ec29e9817f"
+    ],
+    "certification": {
+      "repository": "RPJWeez/fieldsignal-deploy",
+      "workflow": "RPJWeez/fieldsignal-deploy/.github/workflows/certify.yml",
+      "revision": "d6a3b2f4b90dc20280f07f9cf2aca4f4bb52fbd6",
+      "predicateType": "https://delivery-reference-platform.dev/certification/v1",
+      "policyVersion": "fieldsignal-v1",
+      "maxAgeHours": 24,
+      "decisionsPath": ".delivery/certifications.json"
+    }
+  }
+}

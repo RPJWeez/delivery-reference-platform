@@ -1,35 +1,37 @@
 # Application release protocol
 
-1. A contributor changes code/tests/native manifests and runs `make verify`. Private
-   libraries require no release-version or adoption-pin edits.
-2. The pinned shared workflow discovers separately named per-project native checks
-   and affected image-build jobs on PRs. Main checks every native project and publishes
-   the complete image inventory. Pipeline regressions live in the shared project; the
-   app caller contains no service matrix. See [pipeline operation](pipeline.md).
-3. Protected main builds the complete Bake application group using explicit caches.
-   It publishes exact image outputs and required evidence. Partial uploads remain
-   failed/incomplete; they do not produce a complete-candidate handoff.
-4. CI binds verified image digests to the app-owned Helm chart, vendors its pinned local
-   dependency, assigns a run/attempt package version and signs the candidate. It records
-   source, workflow, native builder/material metadata and toolchain inputs. CI ends at
-   **published; QA pending**. It does not deploy or certify.
-5. In fieldsignal-deploy, QA accepts the digest-addressed candidate handoff, verifies
-   trusted source/workflow/revision and all images, checks candidate-specific config
-   schema, then runs disposable kind/Argo/functional tests. It records observed identity
-   before/after tests. No rebuild or image substitutions occur.
-6. A separately protected certification workflow verifies build and signed QA evidence,
-   current policy, expiry/revocation and fresh high-or-critical vulnerability scanning.
-   It signs eligibility against the original registry digest; it does not copy artifacts.
-7. A reviewed promotion selects that digest and an existing reviewed configuration
-   commit. Configuration must be committed first; the pointer cannot name itself.
-   Production verifies current certification and the exact proposed pairing.
-8. GitOps reconciles desired state. Observed sync/health is a separate required state;
-   serialization must continue through health confirmation. The shared production
-   observer/merge interlock still requires an actual selected runtime integration.
-9. Recovery selects a compatible retained pair, rechecking current eligibility and data/
-   contract compatibility. An expired/revoked candidate cannot bypass current policy.
+1. A contributor changes source/native manifests and runs `make verify`. Branch and PR
+   CI run affected native checks, workspace checks and non-publishing container proofs.
+2. A developer may manually create a dev package from their branch. Trusted main resolves
+   its exact commit, validates/builds it and publishes complete dev images/chart/evidence.
+   Separate dev CD selects and deploys that immutable package.
+3. Merging to main runs complete validation only. It does not publish images or a chart.
+4. A release owner manually creates a release candidate from main. One operation validates
+   the exact commit, builds/publishes the complete image inventory, binds exact digests into
+   the app-owned chart and publishes signed package evidence. It ends at **QA pending**.
+   A partial upload or failed attestation is not a complete handoff.
+5. Alternatively, compose a candidate from an explicit existing baseline and component
+   overrides. Verify each image's original trusted producer and declared compatibility;
+   record chart source, original component revisions and composition reason. No rebuilds.
+6. Separate QA/CD verifies and deploys the exact candidate/configuration in its test
+   environment and records candidate-specific runtime evidence. Certification independently
+   checks that evidence, current policy and vulnerability requirements and issues an
+   expiring signed decision on the same candidate digest. Mixed-component candidates
+   require qualification of the resulting combination.
+7. The source repository's manual **Promote candidate to release** workflow checks that
+   certificate and the issuer's current protected eligibility ledger. It atomically reserves
+   a unique release ID and signs a designation of the same candidate digest. It does not
+   copy/repackage the chart, rebuild images, modify environment config or deploy.
+8. Separate environment promotion selects the released digest and an existing reviewed
+   configuration commit. CD rechecks current eligibility, revocation and configuration
+   compatibility, then GitOps reconciles desired state. Deployment/observed health is a
+   separate result and must be serialized through health confirmation.
+9. Recovery selects a compatible retained release/configuration pair and rechecks current
+   eligibility and data/contract compatibility. Rollback does not reverse data or external
+   events, and an old certificate cannot bypass a current revocation.
 
-Prepared workflows are not executed capability. Local checks are recorded in the
-[checkpoint](application-golden-path-checkpoint.md). Source-main publication and the
-cross-repository protected path require review/merge and package access configuration;
-these actions were not authorized or executed during implementation.
+The new source workflows implement artifact production, composition and release-designation
+consumption. The legacy companion does not yet implement the new exact-candidate
+qualification/certification producer and eligibility ledger. That CD integration and live
+protection/registry activation are required before claiming a working protected release path.
+See [implementation status](pipeline-topology-implementation.md) for executed checks and gates.

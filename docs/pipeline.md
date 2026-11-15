@@ -1,88 +1,101 @@
 # Pipeline operation
 
-Application CI calls the versioned reusable workflow in
-[RPJWeez/pipelines](https://github.com/RPJWeez/pipelines/tree/codex/extract-application-delivery).
-The app owns `.github/workflows/ci.yml`, native Maven/npm/Nx builds, Docker/Bake,
-Compose/Helm, contracts, and business tests. Shared scripts, actions, pipeline regressions,
-portability fixtures, and the verification toolchain live in the pipeline repository.
+The application uses pinned reusable workflows from
+[RPJWeez/pipelines](https://github.com/RPJWeez/pipelines/tree/codex/deliberate-delivery-topology).
+The application owns native Maven/npm/Nx builds, Bake image definitions, Helm charts,
+`.delivery/application.json` and business tests. Generic delivery implementation remains
+in the shared repository. CI and the Compose verification toolchain pin the same commit.
 
-## Developer workflow
+## Validation
 
-Use `make dev`, `make verify`, and `make stop`. Local `make verify` retains the convenient
-full-application `npm run verify` command. Hosted CI exposes the native work as separate jobs:
+`Application CI` runs on branch pushes, PR events and merge-queue events. Branch pushes
+with an open PR skip duplicate work; an API lookup failure runs checks conservatively.
+Main merges validate every native project and do not publish images or candidates.
+PR/branch affected selection uses exact source commits, the native Nx graph and declared
+inputs; root workspace checks always run. Non-Nx applications can supply named commands.
+The required aggregate remains `delivery / Validation complete`; inspect the actual hosted
+context before changing branch-protection settings. Tests also protect the UI-only case:
+station-console edits do not mark the Maven parent and all Java projects affected.
 
-- `Build/Test - <Java project>` runs native Maven verification for that module and its
-  required private source dependencies.
-- `Build - <library>` and `Build/Typecheck - <frontend>` run declared native Nx targets.
-- `Test - Workspace and dependency graph` runs the root native `ci` target.
-- `Lint - application-chart` checks the shared chart templates.
-- `Build Image - <target>` verifies a selected PR image; main uses
-  `Build & Publish Image - <target>` for every application image.
+Native build/test/typecheck jobs and source-container proofs have read-only permissions,
+no registry login and no image publication. New validation and package workflows disable
+shared build/task caches until safe cross-trust acceleration is demonstrated. Local
+`make verify` remains the full native verification command.
 
-PRs select changed projects and consumers through the native Nx graph. Repo-wide checks
-always run, and ambiguous image ownership builds conservatively. Main checks every native
-project and publishes a complete image closure; it does not mix in historical image outputs.
-New projects need native targets/dependency edges, image/runtime declarations, and tests.
-There is no service list in the app caller or shared workflow. A `ci` target is the native
-extension point for additional per-project checks; repositories without Nx can declare
-named native commands through the shared workflow's `project-checks` input.
+## Manual artifact production
 
-Each matrix job has its own source checkout and cache producer scope. Maven jobs build
-needed source dependencies with `-am`, so dependency compilation/tests may repeat across
-jobs without private package publication. Native task caching remains available for Nx
-jobs. Browser/API/Kafka tests remain separate runtime QA checks.
+Dispatch these application workflows **on main**:
 
-The Compose verification toolchain and CI caller pin the same reviewed pipeline commit.
-Update both pins together when upgrading. The app carries no generic pipeline scripts.
+| Workflow                     | Input                                                                 | Result                                                   |
+| ---------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
+| Create dev package           | Same-repository `source-ref` branch                                   | Complete immutable dev image/chart package               |
+| Create release candidate     | No source override                                                    | Complete candidate built from exact dispatch-main commit |
+| Compose release candidate    | Immutable baseline, optional component-to-candidate overrides, reason | New candidate using existing images; no image builds     |
+| Promote candidate to release | Immutable qualified candidate, unique release ID                      | Signed release designation of that same chart digest     |
 
-## Delivery ownership
+Workflow instructions and trust policy come from protected main. Dev source is resolved
+once to a commit; its chart/component declarations can include new components, while main
+retains application identity and trust policy. Fork packaging is not supported. If main
+moves before release-source resolution, dispatch again. No workflow in this table deploys.
 
-The shared workflow discovers Bake's complete `application` group, builds source containers
-without pushing on PRs, and publishes all images on a main push after verification. It
-binds exact native output digests into `charts/fieldsignal`, verifies rendered completeness,
-vendors the local chart dependency and publishes the immutable candidate with evidence.
-There is no hand-maintained workflow service matrix or internal library publication.
+Package creation validates source, exports OCI image archives and builds the Helm chart
+without publication credentials. A separate read-only job verifies the payload, chart
+image closure, OCI blob hashes, source identities and limits. Fresh publishing jobs copy
+images by digest and publish chart/evidence. They do not execute branch scripts or render
+branch chart templates. A successful complete handoff includes immutable chart and image
+references, original producer/composer identities, compatibility declarations, SBOM and
+signed attestations. Partial image uploads are not a complete handoff.
 
-Helpers are checked out under ignored `.work/delivery` at the reusable workflow's own
-commit, not from the app or platform main. Shared dependencies install there independently.
-The app caller grants a permission ceiling; each platform job narrows permissions. No
-`secrets: inherit` or extra write token is passed.
+Dev and release artifacts use separate `-dev`/`-release` image repositories and
+`-dev-packages`/`-release-packages` chart repositories. Dev packages cannot be release
+composition inputs. Release creation initially builds every component; unchanged-image
+reuse is a later optimization. Composition requires an explicit baseline digest, not
+independent per-component latest tags. Example override:
 
-The implementation retains current signing, SBOM, Release-retention and human-reporting
-behavior for migration compatibility. Its generic regression suite is maintained centrally.
-Source CI ends at **published, QA pending, certification pending**. Partial image/chart
-uploads and missing evidence cannot establish a complete handoff. Run-attempt identities
-and summary-write isolation remain enforced by platform tests.
+```json
+{
+  "ingestion-service": "ghcr.io/rpjweez/delivery-reference-platform-release-packages/fieldsignal@sha256:..."
+}
+```
 
-## Deployment integration and activation
+This selects ingestion-service from that verified candidate, preserving its original
+source/provenance. Other components remain from the baseline. Compatibility labels and
+configuration contracts must match. The new combination still requires its own QA.
 
-See [shared pipeline migration](shared-pipeline-migration.md) for the exact pin, changed
-check names, QA-hook paths, and signer trust changes. Moving attestation generation into
-a reusable workflow changes signer identity; the caller source repo/ref/SHA remain separate
-verification requirements. Deployment consumers must migrate these checks deliberately.
-Existing exported actions remain usable at their historical source commits.
+## Release designation and separate CD
 
-The companion owns candidate consumption, QA/certification policy, immutable environment
-configuration, promotion and production health. None of those capabilities is activated
-merely by extracting CI. See [release protocol](release-protocol.md) and
-[operator recovery](operator-runbook.md).
+Promotion verifies the candidate/image evidence, trusted external certification, current
+policy, expiry and the issuer's protected eligibility ledger. It atomically allocates
+`delivery-release/<release-id>` without overwriting an existing ID. Compatible retries
+preserve the original designation. The successful release attestation is the completion
+signal; a tag alone does not establish eligibility.
 
-## Reading the run summary
+The companion's existing QA predicate is not certification. Its legacy workflow also
+repackages dependencies; it is not the new exact-candidate CD integration. The descriptor
+names the required future `certify.yml` issuer contract, but that issuer/ledger is **not
+activated by this change**. Replace its revision with the reviewed real certification
+workflow revision before enabling promotion; do not treat the recorded companion baseline
+revision as evidence that such a workflow exists. Promotion fails closed until a real
+trusted certificate and current eligible ledger entry exist.
 
-There is one `Application delivery summary` box. It lists each project's work/result,
-images built or omitted as unaffected, failure-step/log links, image evidence, candidate
-publication state, and downloads. Native commands and bounded test/build/cache output
-are expandable inside that same report.
+Separate CD consumes exact package/release digests, performs deployment and runtime QA,
+and owns reviewed environment configuration plus observed health. Candidate-to-release
+designation differs from environment promotion of a release/config pair. Neither changes
+images or rebuilds a chart. See [release protocol](release-protocol.md).
 
-Third-party Docker and attestation summaries are disabled. Non-report steps and native
-child commands redirect job-summary writes; only the final report explicitly writes the
-GitHub summary. Logs, Docker build records, test reports and attestations remain available.
+## Activation and recovery
 
-Successful image builds/pushes do not establish a complete candidate when chart publication
-fails. Source CI never claims runtime QA, certification, or application deployment.
+See [topology implementation status](pipeline-topology-implementation.md) and the shared
+[bootstrap guide](https://github.com/RPJWeez/pipelines/blob/codex/deliberate-delivery-topology/bootstrap/README.md).
+Configure protected main and fixed environments `delivery-dev`, `delivery-release` and
+`delivery-promotion`, scoped identities, protected release tags, registry retention and
+certification access. Require review of `.delivery` policy and workflow changes. No live
+protection/environment/registry settings are changed by this implementation.
 
-Initial hosted acceptance: [run 43653169063](https://github.com/RPJWeez/delivery-reference-platform/actions/runs/43653169063)
-passed nine separately named project-check jobs and four image-build jobs. Its run page
-was inspected and contained exactly one consolidated job-summary box. The shared tests
-also cover failed discovery, cancelled/failed matrix jobs, native commands without Nx,
-and missing/duplicate/inconsistent image metadata.
+The initial profile is GitHub.com/Enterprise Cloud, GHCR, ephemeral hosted Ubuntu,
+linux/amd64, Bake and Helm. It accepts up to 256 checks/components and a 4 GiB payload
+(2 GiB per archive); larger/multiarch/private-dependency profiles need tested adapters.
+Durable images/charts/evidence stay in OCI; Actions diagnostics expire independently.
+Retain every image and evidence object referenced by a retained candidate/release.
+Existing pinned legacy workflows and candidate verification remain available for rollback;
+downstream consumers must explicitly adopt the new package-v2 signer/predicate contract.

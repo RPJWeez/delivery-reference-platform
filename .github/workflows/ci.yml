@@ -1,21 +1,23 @@
 name: Application CI
 on:
-  pull_request:
   push:
-    branches: [main]
+    branches:
+      - "**"
+  pull_request: {}
+  merge_group: {}
 permissions:
   contents: read
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: validation-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   delivery:
+    uses: RPJWeez/pipelines/.github/workflows/validate.yml@bb4d1a5dc918d897bba812c146aec9ec29e9817f
     permissions:
-      contents: write
+      contents: read
       actions: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: RPJWeez/pipelines/.github/workflows/application.yml@346090e9c7097f9b1423228fcbc7153641d6f728
+      pull-requests: read
     with:
+      deduplicate: true
       chart: charts/fieldsignal
+      project-checks: "[]"

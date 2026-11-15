@@ -18,36 +18,41 @@ optional. [Native IDE commands and contributor guide](docs/local-development.md)
 
 ```mermaid
 flowchart LR
-  PR[PR: affected validation + source container proof] --> CI[Protected CI: complete OCI Helm candidate]
-  CI --> QA[Separate QA CD: exact digest in disposable kind]
-  QA --> Cert[Protected signed certification]
-  Cert --> Promote[Reviewed candidate + immutable config pair]
-  Promote --> Argo[GitOps sync and observed health]
+  Source[Branch / PR / main] --> Validate[Read-only validation]
+  Branch[Manual branch package] --> Dev[Immutable dev chart + images]
+  Main[Manual main candidate] --> RC[Immutable release candidate]
+  Compose[Manual composition] --> RC
+  RC --> QA[Separate QA and certification]
+  QA --> Promote[Manual candidate-to-release designation]
+  Promote --> CD[Separate environment promotion and CD]
 ```
 
 The app calls [shared delivery workflows](https://github.com/RPJWeez/pipelines/tree/codex/extract-application-delivery)
-through a small pinned YAML caller. Pipeline scripts/tests/toolchains live there; this repo
+through thin pinned YAML callers. Pipeline scripts/tests/toolchains live there; this repo
 owns native builds, runtime declarations and business tests. See the
 [migration and activation notes](docs/shared-pipeline-migration.md).
 
 Maven/npm own native builds; Nx retains graph analysis, orchestration and caches. Private
 libraries build from the same checkout without registry access or release/adoption-pin
 bookkeeping. Bake supplies native image metadata; Helm supplies runtime declarations.
-A shared adapter checks image completeness. CI builds every application image and packages
+A shared adapter checks image completeness. Manual candidate creation builds every application image and packages
 the app-owned chart with exact digests, vendored dependencies, schema and build identities.
-Chart versions are assigned by run/attempt. CI does not deploy or claim runtime qualification.
+Chart versions are assigned by run/attempt. Validation never publishes; package creation and release designation never deploy.
 
 The [companion deployment repository](https://github.com/RPJWeez/fieldsignal-deploy)
-consumes the digest handoff, runs isolated QA, certifies against current policy, and validates
-promotion pairs. Runtime config pins an existing reviewed commit; the outer GitOps pointer
+contains the legacy qualification/GitOps example. Adopting the new exact-candidate
+handoff, certification issuer and eligibility ledger remains a separate CD integration. Runtime config pins an existing reviewed commit; the outer GitOps pointer
 may follow protected main. Promotion/rollback never rebuilds or substitutes images.
 
-The migration has demonstrated local source builds, cache restoration/invalidation,
+The earlier migration demonstrated local source builds, cache restoration/invalidation,
 real API/Kafka/browser behavior and second-application build/runtime adapters. Protected
 registry publication and cross-repository QA/certification remain integration gates.
 No shared/production deployment, live protection changes or artifact deletion occurred.
 Read the [implementation checkpoint](docs/application-golden-path-checkpoint.md) for exact
 executed checks and remaining work; prepared code is not a claim of live capability.
+
+See [pipeline implementation status](docs/pipeline-topology-implementation.md) for the new
+source workflow validation and activation gates.
 
 See [architecture](docs/architecture.md), [pipeline](docs/pipeline.md),
 [release protocol](docs/release-protocol.md) and [operator recovery](docs/operator-runbook.md).

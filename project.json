@@ -5,16 +5,16 @@
       "executor": "nx:run-commands",
       "cache": true,
       "inputs": [
-        "{workspaceRoot}/pom.xml",
-        "{workspaceRoot}/.mvn/**/*",
-        "{workspaceRoot}/mvnw",
-        "{workspaceRoot}/apps/*/pom.xml",
-        "{workspaceRoot}/apps/*/src/**/*",
-        "{workspaceRoot}/libraries/*/pom.xml",
-        "{workspaceRoot}/libraries/*/src/**/*",
-        "{workspaceRoot}/nx.json",
-        "{workspaceRoot}/.github/workflows/ci.yml",
-        "{workspaceRoot}/compose.yaml"
+        "{projectRoot}/pom.xml",
+        "{projectRoot}/.mvn/**/*",
+        "{projectRoot}/mvnw",
+        "{projectRoot}/apps/*/pom.xml",
+        "{projectRoot}/apps/*/src/**/*",
+        "{projectRoot}/libraries/*/pom.xml",
+        "{projectRoot}/libraries/*/src/**/*",
+        "{projectRoot}/nx.json",
+        "{projectRoot}/.github/workflows/ci.yml",
+        "{projectRoot}/compose.yaml"
       ],
       "outputs": [
         "{workspaceRoot}/apps/*/target",
