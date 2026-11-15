@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   delivery:
-    uses: RPJWeez/pipelines/.github/workflows/validate.yml@bb4d1a5dc918d897bba812c146aec9ec29e9817f
+    uses: RPJWeez/pipelines/.github/workflows/validate.yml@6cf88f781b64e97ea3fb71b22f13130d0426b044
     permissions:
       contents: read
       actions: read

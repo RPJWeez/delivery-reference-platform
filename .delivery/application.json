@@ -35,7 +35,7 @@
     "environment": "delivery-release",
     "pipelineRepository": "RPJWeez/pipelines",
     "trustedPipelineRevisions": [
-      "bb4d1a5dc918d897bba812c146aec9ec29e9817f"
+      "6cf88f781b64e97ea3fb71b22f13130d0426b044"
     ],
     "certification": {
       "repository": "RPJWeez/fieldsignal-deploy",

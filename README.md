@@ -27,7 +27,7 @@ flowchart LR
   Promote --> CD[Separate environment promotion and CD]
 ```
 
-The app calls [shared delivery workflows](https://github.com/RPJWeez/pipelines/tree/codex/extract-application-delivery)
+The app calls [shared delivery workflows](https://github.com/RPJWeez/pipelines/tree/codex/deliberate-delivery-topology)
 through thin pinned YAML callers. Pipeline scripts/tests/toolchains live there; this repo
 owns native builds, runtime declarations and business tests. See the
 [migration and activation notes](docs/shared-pipeline-migration.md).
