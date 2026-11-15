@@ -14,7 +14,7 @@ permissions:
   contents: read
 jobs:
   promote:
-    uses: RPJWeez/pipelines/.github/workflows/promote.yml@e6bb1233f06d30582189ab8a96179276257c242b
+    uses: RPJWeez/pipelines/.github/workflows/promote.yml@1a061bb62793c614ec62fe763e9e7d38ef7956b7
     permissions:
       contents: write
       actions: read

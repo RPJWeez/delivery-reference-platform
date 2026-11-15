@@ -21,12 +21,13 @@ changes or registry-policy changes are included.
 
 ## Verification
 
-Shared local suite: 74 regressions, formatting and workflow lint passed. The linter has
+Shared local suite: 75 regressions, formatting and workflow lint passed. The linter has
 narrow exemptions for documented GitHub Cloud exact-self-checkout contexts and `$/`
 self-repository workflow syntax. Local Docker OCI export with pinned SBOM scanner,
 recursive blob verification, architecture checks and Helm packaging passed without registry
 publication. FieldSignal's 8 workspace/graph/chart regressions passed inside the existing
-Java/Node verification container. Hosted CI results are recorded in the implementation
+Java/Node verification container. Modified application files pass formatting; the full
+application formatting check reports 10 pre-existing issues in untouched files. Hosted CI results are recorded in the implementation
 handoff after the final pinned commit is tested.
 
 ## Activation gates and explicit deferrals

@@ -38,7 +38,8 @@ once to a commit; its chart/component declarations can include new components, w
 retains application identity and trust policy. Fork packaging is not supported. If main
 moves before release-source resolution, dispatch again. No workflow in this table deploys.
 
-Package creation validates source, exports OCI image archives and builds the Helm chart
+Package creation runs native validation, then builds each image once into an OCI archive
+and builds the Helm chart
 without publication credentials. A separate read-only job verifies the payload, chart
 image closure, OCI blob hashes, source identities and limits. Fresh publishing jobs copy
 images by digest and publish chart/evidence. They do not execute branch scripts or render
