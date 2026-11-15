@@ -63,7 +63,7 @@ function App() {
       <div className="page-heading">
         <div>
           <div className="eyebrow">SENSING / FIELD TELEMETRY</div>
-          <h1>Your network, in focus.</h1>
+          <h1>Super cool heading without AI-coded language</h1>
           <p className="subtitle">
             Submit synthetic river readings and follow observations as they
             enter the field network.
