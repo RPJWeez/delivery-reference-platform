@@ -19,7 +19,7 @@
     <plugin><groupId>dev.nx.maven</groupId><artifactId>nx-maven-plugin</artifactId><version>0.0.19</version></plugin>
   </plugins></pluginManagement><plugins>
     <plugin>
-      <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.6.1</version>
+      <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.7.0</version>
       <executions><execution><id>private-reactor-convergence</id><goals><goal>enforce</goal></goals>
         <configuration><rules><reactorModuleConvergence/></rules></configuration>
       </execution></executions>
